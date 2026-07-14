@@ -5,6 +5,9 @@ import { loadConfig } from "./config";
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
+  app.enableCors({
+    origin: (process.env.WEB_ORIGINS ?? "http://localhost:3001").split(","),
+  });
   app.enableShutdownHooks();
   const { port } = loadConfig();
   await app.listen(port);
