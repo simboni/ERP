@@ -17,6 +17,11 @@ import { InvoicesController } from "./invoicing/invoices.controller";
 import { InvoicesService } from "./invoicing/invoices.service";
 import { LedgerService } from "./ledger/ledger.service";
 import {
+  NOTIFICATION_PROVIDER,
+  NotificationsService,
+  SandboxNotificationProvider,
+} from "./notifications/notifications.service";
+import {
   MpesaWebhookController,
   PaymentsController,
 } from "./payments/payments.controller";
@@ -65,6 +70,8 @@ import { TenantsController } from "./tenants/tenants.controller";
     PayrollService,
     ComplianceService,
     BillsService,
+    NotificationsService,
+    { provide: NOTIFICATION_PROVIDER, useClass: SandboxNotificationProvider },
     { provide: PAYOUT_PROVIDER, useClass: SandboxPayoutProvider },
     // Provider selection is configuration: sandbox by default; the
     // production adapters activate via env once Phase-0 credentials exist.

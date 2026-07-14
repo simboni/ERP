@@ -4,10 +4,12 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import type { PoolClient } from "pg";
+import { Optional } from "@nestjs/common";
 import { mulRate } from "../payroll/calculator";
 import { FiscalService } from "../fiscal/fiscal.service";
 import { LedgerService } from "../ledger/ledger.service";
 import { AuditService } from "../audit/audit.service";
+import { NotificationsService } from "../notifications/notifications.service";
 
 export interface InvoiceLineInput {
   description: string;
@@ -29,6 +31,7 @@ export class InvoicesService {
     private readonly ledger: LedgerService,
     private readonly fiscal: FiscalService,
     private readonly audit: AuditService,
+    @Optional() private readonly notifications?: NotificationsService,
   ) {}
 
   computeLine(line: InvoiceLineInput): { totalCents: number; vatCents: number } {
@@ -177,7 +180,7 @@ export class InvoicesService {
       [args.invoiceId],
     );
     const customerRes = await client.query(
-      `SELECT name, kra_pin FROM customers WHERE id = $1`,
+      `SELECT name, kra_pin, phone FROM customers WHERE id = $1`,
       [inv.customer_id],
     );
     const fiscalDoc = await this.fiscal.enqueue(client, args.tenantId, {
@@ -202,6 +205,25 @@ export class InvoicesService {
        WHERE id = $1`,
       [args.invoiceId, invoiceNo, args.issueDate, posting.entryId, fiscalDoc.id],
     );
+
+    // Customer SMS commits atomically with the issue (notification outbox).
+    const customerPhone: string | null = customerRes.rows[0]?.phone ?? null;
+    if (this.notifications && customerPhone) {
+      const tenantRes = await client.query(
+        "SELECT name FROM tenants WHERE id = $1",
+        [args.tenantId],
+      );
+      await this.notifications.enqueue(client, args.tenantId, {
+        channel: "sms",
+        recipient: customerPhone,
+        templateKey: "invoice_issued",
+        payload: {
+          businessName: tenantRes.rows[0]?.name ?? "Your supplier",
+          invoiceNo,
+          totalKes: (total / 100).toFixed(2),
+        },
+      });
+    }
     await this.audit.record(client, {
       tenantId: args.tenantId,
       actorUserId: args.userId,

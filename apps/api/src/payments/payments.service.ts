@@ -3,11 +3,13 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
 import type { PoolClient } from "pg";
 import { AuditService } from "../audit/audit.service";
 import { DbService } from "../db/db.service";
 import { LedgerService } from "../ledger/ledger.service";
+import { NotificationsService } from "../notifications/notifications.service";
 import { PaymentProvider } from "./provider";
 
 export const PAYMENT_PROVIDER = "PAYMENT_PROVIDER";
@@ -51,6 +53,7 @@ export class PaymentsService {
     private readonly ledger: LedgerService,
     private readonly audit: AuditService,
     @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
+    @Optional() private readonly notifications?: NotificationsService,
   ) {}
 
   /** Register the tenant's paybill/till so callbacks can route to it. */
@@ -311,6 +314,28 @@ export class PaymentsService {
         receipt: payment.receipt_number,
       },
     });
+
+    // Receipt SMS to the payer, atomic with the reconciliation.
+    const payerMsisdn = (
+      await client.query("SELECT msisdn FROM payments WHERE id = $1", [paymentId])
+    ).rows[0]?.msisdn as string | null;
+    if (this.notifications && payerMsisdn) {
+      const tenantRes = await client.query(
+        "SELECT name FROM tenants WHERE id = $1",
+        [tenantId],
+      );
+      await this.notifications.enqueue(client, tenantId, {
+        channel: "sms",
+        recipient: payerMsisdn,
+        templateKey: "payment_received",
+        payload: {
+          businessName: tenantRes.rows[0]?.name ?? "Your supplier",
+          amountKes: (Number(payment.amount_cents) / 100).toFixed(2),
+          receipt: payment.receipt_number ?? "-",
+          invoiceNo: Number(invoice.invoice_no),
+        },
+      });
+    }
     return { matched: true };
   }
 }
