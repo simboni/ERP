@@ -65,13 +65,15 @@ Technical notes (validate in sandbox):
 
 ---
 
-## 2. Statutory payroll (2025–2026 baseline)
+## 2. Statutory payroll (verified July 2026)
 
-All figures are the January-2026 baseline; the payroll engine reads them from the
-versioned rules store with effective dates.
+*All items below verified July 2026 against official (KRA, NSSF, NITA, Ministry of
+Labour) and advisory (KPMG, EY, Grant Thornton, Vialto, CDH, RSM) sources. The payroll
+engine reads every figure from the versioned rules store with effective dates.*
 
-### 2.1 PAYE (income tax on employment)
-Monthly bands (in force since Finance Act 2023, unchanged through Jan 2026 ⚠️ VERIFY):
+### 2.1 PAYE (income tax on employment) — VERIFIED
+Monthly bands (in force since 1 Jul 2023; **unchanged by Finance Acts 2025 and 2026** —
+Finance Bill 2026 proposals to restructure bands were rejected by Parliament):
 
 | Monthly taxable income (KES) | Rate |
 |---|---|
@@ -82,50 +84,70 @@ Monthly bands (in force since Finance Act 2023, unchanged through Jan 2026 ⚠�
 | Above 800,000 | 35% |
 
 - **Personal relief:** KES 2,400/month. **Insurance relief:** 15% of premiums, capped
-  KES 5,000/month.
-- **Tax Laws (Amendment) Act 2024, effective 27 Dec 2024:** SHIF contributions and the
-  Affordable Housing Levy became **deductible from taxable income** (replacing the prior
-  relief treatment); the affordable-housing relief was repealed accordingly ⚠️ VERIFY
-  exact current treatment and any mortgage/pension deduction cap changes (post-2024
-  pension contribution deductible limit rose to KES 30,000/month ⚠️ VERIFY).
+  KES 5,000/month (SHIF no longer earns insurance relief — it is an income deduction).
+- **Tax Laws (Amendment) Act 2024 (effective 27 Dec 2024) — VERIFIED:** SHIF, Affordable
+  Housing Levy, and post-retirement medical fund contributions (capped KES 15,000/month)
+  are **deductible from taxable income**; the 15% affordable-housing relief was repealed;
+  deductible pension/provident limit rose KES 20,000 → **30,000/month**; mortgage
+  interest cap rose to 30,000/month. [official: KRA public notice 2157; advisory: KPMG
+  TLAA 2024 analysis, Cliffe Dekker Hofmeyr]
+- **Finance Act 2025 (effective 1 Jul 2025) — engine requirements:** employers **must
+  automatically apply all eligible reliefs, exemptions and deductions** in PAYE
+  computation (this is now a legal duty our engine satisfies by design); tax-free per
+  diem raised to **KES 10,000/day**; gratuity exempted — **Finance Act 2026 (assented
+  23 Jun 2026)** tightened the gratuity exemption to require ≥3 years' continuous
+  service. [advisory: Vialto, payroll.org, ENSafrica, EY]
 
-### 2.2 NSSF (pensions — NSSF Act 2013 tiered phase-in)
+### 2.2 NSSF (NSSF Act 2013 tiered phase-in) — VERIFIED
 - Rates: **6% employee + 6% employer** of pensionable earnings.
-- Tier I on earnings up to the Lower Earnings Limit (LEL); Tier II from LEL to Upper
-  Earnings Limit (UEL). Year 3 (from **Feb 2025**): LEL 8,000 / UEL 72,000 →
-  max employee contribution 4,320. Year 4 (from **Feb 2026**): UEL stepped up again
-  (schedule ties UEL to national average earnings; reported Year 4 figures LEL 9,000 /
-  UEL 108,000 ⚠️ VERIFY the gazetted Feb 2026 limits before implementing).
-- Tier II may be directed to a registered private scheme with RBA approval — the payroll
-  module must support contracted-out Tier II.
+- Year 3 (from Feb 2025): LEL 8,000 / UEL 72,000 (max employee 4,320/month).
+- **Year 4 (from 1 Feb 2026) — CONFIRMED: LEL 9,000 / UEL 108,000** → Tier I max
+  KES 540 each side; Tier II on earnings 9,001–108,000; **max deduction KES 6,480
+  employee + 6,480 employer (12,960 combined)**. [official: nssf.or.ke;
+  advisory: CM Advocates, PaySpace]
+- Tier II may be contracted out to a registered private scheme with RBA approval — the
+  payroll module must support contracted-out Tier II.
 
-### 2.3 SHIF (Social Health Insurance Fund — replaced NHIF, 1 Oct 2024)
-- **2.75% of gross salary**, minimum **KES 300/month**, no upper cap ⚠️ VERIFY any
-  2025/2026 amendments.
-- Employer deducts and remits by the **9th of the following month**.
-- Non-payroll persons pay 2.75% of household income (min KES 300) — relevant only for
-  informing employee self-service education screens.
+### 2.3 SHIF (Social Health Insurance Fund — replaced NHIF, 1 Oct 2024) — VERIFIED
+- **2.75% of gross salary**, minimum **KES 300/month, no upper cap**; employer deducts
+  and remits to SHA by the **9th of the following month** (SHI General Regulations 2024).
+- **Litigation watch item:** in June 2025 the High Court opined the 2.75% gross-income
+  deduction is unlawful but issued **no orders** (issues pending at the Court of Appeal,
+  Civil Appeal E565/2024); the Ministry of Health confirmed deductions **remain in
+  force**. The rules store means any court-ordered change is a data update. [advisory:
+  ALN, Vialto, Citizen Digital, Standard]
 
-### 2.4 Affordable Housing Levy
-- **1.5% of gross salary from the employee + 1.5% employer match** (Affordable Housing
-  Act 2024), remitted with the payroll cycle by the 9th working day ⚠️ VERIFY exact
-  deadline wording.
-- Deductible for PAYE from Dec 2024 (see §2.1).
+### 2.4 Affordable Housing Levy — VERIFIED
+- **1.5% employee + 1.5% employer** on monthly gross salary (Affordable Housing Act
+  2024); remit **within 9 working days after month end**; late penalty **3% of the
+  unpaid amount per month**. Employee share deductible for PAYE from Dec 2024 (§2.1).
+  [advisory: EY, KPMG, Grant Thornton]
 
-### 2.5 NITA industrial training levy
-- **KES 50 per employee per month**, employer-borne; collected **via the KRA unified
-  payroll return alongside PAYE** ⚠️ VERIFY current remittance mechanics.
+### 2.5 NITA industrial training levy — VERIFIED
+- **KES 50/employee/month** (KES 600/year), employer-borne, **declared via the KRA
+  unified payroll return** (with PAYE on iTax). Payment may be consolidated **annually**
+  (KES 600/employee by the 9th of the month after the employer's accounting year-end) —
+  support both monthly and annual remittance. Late penalty 5%. [official: nita.go.ke;
+  advisory: RSM, PwC]
 
-### 2.6 Filing mechanics the payroll module must automate
-- **PAYE + housing levy + NITA:** monthly filing via iTax (P10/unified payroll return),
-  payment by the **9th of the following month**.
-- **NSSF:** monthly return and payment (by the 9th ⚠️ VERIFY current deadline).
-- **SHIF:** monthly, by the 9th.
-- Outputs the module must generate: P9 annual employee tax card, payslips with all
-  statutory lines, bank/M-Pesa net-pay files, and CSV/API-ready returns for each agency.
-- Penalties (late PAYE: 25% of tax due min KES 10,000; late NSSF/SHIF/levy penalties
-  ⚠️ VERIFY each) — the product should surface deadline countdowns and auto-drafted
+### 2.6 Filing mechanics the payroll module must automate — VERIFIED
+- **PAYE + housing levy + NITA:** monthly iTax unified payroll return; file and pay by
+  the **9th of the following month**.
+- **NSSF:** by the 9th; late-payment penalty **5% per month or part month**.
+- **SHIF:** by the 9th; late penalty **2% of the unpaid amount per period**; employer
+  offences up to KES 2M fine and/or 3 years' imprisonment.
+- **PAYE penalties (clarified):** late **filing** 25% of tax due (min KES 10,000); late
+  **payment** separately 5% of tax due + 1% interest/month.
+- Outputs: P9 annual tax card, payslips with all statutory lines, bank/M-Pesa net-pay
+  files, CSV/API-ready returns per agency — with deadline countdowns and auto-drafted
   returns as a headline feature.
+
+### 2.7 Minimum wage — VERIFIED
+- Regulation of Wages (Amendment) Order 2024: ~6% rise effective 1 Nov 2024 [official:
+  labour.go.ke]. **Legal Notice No. 109 of 2026 (effective 1 May 2026): +12% general /
+  +15% agricultural minimum wages.** Sector/city rate tables to be loaded into the rules
+  store from the Legal Notice text; the HR module should warn when a contracted wage
+  falls below the applicable order.
 
 ---
 
