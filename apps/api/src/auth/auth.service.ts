@@ -15,6 +15,7 @@ import type {
 } from "@jenga/shared";
 import { loadConfig } from "../config";
 import { DbService } from "../db/db.service";
+import { generateTotpSecret, otpauthUrl, verifyTotp } from "./totp";
 
 export interface SignupInput {
   email: string;
@@ -67,9 +68,13 @@ export class AuthService {
   async login(
     email: string,
     password: string,
-  ): Promise<{ accessToken: string; refreshToken: string; userId: string }> {
+  ): Promise<
+    | { accessToken: string; refreshToken: string; userId: string }
+    | { mfaRequired: true; mfaToken: string }
+  > {
     const res = await this.db.query(
-      `SELECT id, password_hash, status FROM users WHERE lower(email) = lower($1)`,
+      `SELECT id, password_hash, status, totp_enabled
+       FROM users WHERE lower(email) = lower($1)`,
       [email.trim()],
     );
     const user = res.rows[0];
@@ -82,10 +87,90 @@ export class AuthService {
     if (!user || !valid || user.status !== "active") {
       throw new UnauthorizedException("Invalid credentials");
     }
-    const claims: UserTokenClaims = { sub: user.id, typ: "user" };
+    if (user.totp_enabled) {
+      // Password verified; second factor pending. The mfa token can ONLY
+      // be exchanged via verifyTotpLogin.
+      const mfaToken = await this.jwt.signAsync(
+        { sub: user.id, typ: "mfa" },
+        { expiresIn: 300 },
+      );
+      return { mfaRequired: true, mfaToken };
+    }
+    return this.issueSession(user.id);
+  }
+
+  private async issueSession(
+    userId: string,
+  ): Promise<{ accessToken: string; refreshToken: string; userId: string }> {
+    const claims: UserTokenClaims = { sub: userId, typ: "user" };
     const accessToken = await this.jwt.signAsync(claims);
-    const refreshToken = await this.issueRefreshToken(user.id);
-    return { accessToken, refreshToken, userId: user.id };
+    const refreshToken = await this.issueRefreshToken(userId);
+    return { accessToken, refreshToken, userId };
+  }
+
+  /** Step 1 of enrolment: create a pending secret (not yet enforced). */
+  async totpSetup(userId: string): Promise<{ secret: string; otpauth: string }> {
+    const user = await this.db.query(
+      "SELECT email, totp_enabled FROM users WHERE id = $1",
+      [userId],
+    );
+    if (!user.rows[0]) throw new UnauthorizedException();
+    if (user.rows[0].totp_enabled) {
+      throw new ForbiddenException("2FA is already enabled");
+    }
+    const secret = generateTotpSecret();
+    await this.db.query("UPDATE users SET totp_secret = $2 WHERE id = $1", [
+      userId,
+      secret,
+    ]);
+    return { secret, otpauth: otpauthUrl(secret, user.rows[0].email) };
+  }
+
+  /** Step 2: prove possession of the authenticator, then enforce. */
+  async totpEnable(userId: string, code: string): Promise<{ enabled: true }> {
+    const res = await this.db.query(
+      "SELECT totp_secret FROM users WHERE id = $1",
+      [userId],
+    );
+    const secret = res.rows[0]?.totp_secret;
+    if (!secret || !verifyTotp(secret, code)) {
+      throw new UnauthorizedException("Invalid authenticator code");
+    }
+    await this.db.query(
+      "UPDATE users SET totp_enabled = true WHERE id = $1",
+      [userId],
+    );
+    return { enabled: true };
+  }
+
+  /** Complete an MFA-gated login. */
+  async verifyTotpLogin(
+    mfaToken: string,
+    code: string,
+  ): Promise<{ accessToken: string; refreshToken: string; userId: string }> {
+    let claims: { sub: string; typ: string };
+    try {
+      claims = await this.jwt.verifyAsync(mfaToken);
+    } catch {
+      throw new UnauthorizedException("Invalid or expired MFA token");
+    }
+    if (claims.typ !== "mfa") {
+      throw new UnauthorizedException("Invalid MFA token");
+    }
+    const res = await this.db.query(
+      "SELECT totp_secret, status FROM users WHERE id = $1",
+      [claims.sub],
+    );
+    const row = res.rows[0];
+    if (
+      !row ||
+      row.status !== "active" ||
+      !row.totp_secret ||
+      !verifyTotp(row.totp_secret, code)
+    ) {
+      throw new UnauthorizedException("Invalid authenticator code");
+    }
+    return this.issueSession(claims.sub);
   }
 
   /** Exchange a user token for a tenant-scoped token after membership check. */

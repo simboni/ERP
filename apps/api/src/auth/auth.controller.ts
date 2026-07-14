@@ -9,6 +9,7 @@ import {
 } from "@nestjs/common";
 import { AuthService } from "./auth.service";
 import { JwtAuthGuard, UserId } from "./guards";
+import { AuthRateLimitGuard } from "./rate-limit.guard";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/;
@@ -58,11 +59,35 @@ export class AuthController {
 
   @Post("login")
   @HttpCode(200)
+  @UseGuards(AuthRateLimitGuard)
   async login(@Body() body: { email?: string; password?: string }) {
     if (!body?.email || !body?.password) {
       throw new BadRequestException("Email and password are required");
     }
     return this.auth.login(body.email, body.password);
+  }
+
+  @Post("totp/setup")
+  @UseGuards(JwtAuthGuard)
+  async totpSetup(@UserId() userId: string) {
+    return this.auth.totpSetup(userId);
+  }
+
+  @Post("totp/enable")
+  @UseGuards(JwtAuthGuard)
+  async totpEnable(@UserId() userId: string, @Body() body: { code?: string }) {
+    if (!body?.code) throw new BadRequestException("code is required");
+    return this.auth.totpEnable(userId, body.code);
+  }
+
+  @Post("totp/verify")
+  @HttpCode(200)
+  @UseGuards(AuthRateLimitGuard)
+  async totpVerify(@Body() body: { mfaToken?: string; code?: string }) {
+    if (!body?.mfaToken || !body?.code) {
+      throw new BadRequestException("mfaToken and code are required");
+    }
+    return this.auth.verifyTotpLogin(body.mfaToken, body.code);
   }
 
   @Post("refresh")
