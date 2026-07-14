@@ -9,6 +9,9 @@ import { FiscalController } from "./fiscal/fiscal.controller";
 import { FISCAL_PROVIDER, FiscalService } from "./fiscal/fiscal.service";
 import { SandboxFiscalProvider } from "./fiscal/provider";
 import { HealthController } from "./health.controller";
+import { InvoicesController } from "./invoicing/invoices.controller";
+import { InvoicesService } from "./invoicing/invoices.service";
+import { LedgerService } from "./ledger/ledger.service";
 import { RulesService } from "./rules/rules.service";
 import { TenantsController } from "./tenants/tenants.controller";
 
@@ -24,6 +27,7 @@ import { TenantsController } from "./tenants/tenants.controller";
     AuthController,
     TenantsController,
     FiscalController,
+    InvoicesController,
     HealthController,
   ],
   providers: [
@@ -32,6 +36,8 @@ import { TenantsController } from "./tenants/tenants.controller";
     AuditService,
     RulesService,
     FiscalService,
+    LedgerService,
+    InvoicesService,
     // Swapped for the real KRA OSCU/VSCU adapter once integrator
     // certification grants credentials (roadmap Phase 0).
     { provide: FISCAL_PROVIDER, useClass: SandboxFiscalProvider },
