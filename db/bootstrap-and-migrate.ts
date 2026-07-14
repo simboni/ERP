@@ -6,16 +6,31 @@
  * Idempotent: roles are created if missing and their passwords re-synced,
  * so rotating the env secrets rotates the DB passwords on next deploy.
  */
+import { createHmac } from "node:crypto";
 import { Client } from "pg";
 import { runMigrations } from "./migrate";
 
+/**
+ * When no explicit role password is provided, derive one from JWT_SECRET
+ * (same derivation as apps/api/src/config.ts) so single-secret platforms
+ * like Railway need only ADMIN_DB_URL + JWT_SECRET to be fully wired.
+ */
+function derivedPassword(role: string): string | undefined {
+  const seed = process.env.JWT_SECRET;
+  if (!seed) return undefined;
+  return createHmac("sha256", seed).update(`${role}-db-password`).digest("hex");
+}
+
 async function main(): Promise<void> {
   const adminUrl = process.env.ADMIN_DB_URL;
-  const appPw = process.env.APP_DB_PASSWORD;
-  const workerPw = process.env.WORKER_DB_PASSWORD;
+  const appPw = process.env.APP_DB_PASSWORD ?? derivedPassword("jenga_app");
+  const workerPw =
+    process.env.WORKER_DB_PASSWORD ?? derivedPassword("jenga_worker");
   if (!adminUrl) throw new Error("ADMIN_DB_URL is required");
   if (!appPw || !workerPw) {
-    throw new Error("APP_DB_PASSWORD and WORKER_DB_PASSWORD are required");
+    throw new Error(
+      "Set APP_DB_PASSWORD and WORKER_DB_PASSWORD, or JWT_SECRET to derive them",
+    );
   }
 
   const client = new Client({ connectionString: adminUrl });

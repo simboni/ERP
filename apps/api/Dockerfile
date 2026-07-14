@@ -32,6 +32,7 @@ COPY --from=build /repo/packages/shared/dist ./node_modules/@jenga/shared/dist
 COPY --from=build /repo/db-dist ./db-dist
 COPY --from=build /repo/db/migrations ./db-dist/migrations
 COPY --from=build /repo/apps/web/out ./web
+COPY --chmod=755 apps/api/docker-entrypoint.sh ./docker-entrypoint.sh
 USER app
 EXPOSE 3000
-CMD ["node", "dist/main.js"]
+CMD ["./docker-entrypoint.sh"]

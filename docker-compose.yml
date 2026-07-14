@@ -37,6 +37,9 @@ services:
       APP_DB_URL: postgres://jenga_app:app_dev_pw@postgres:5432/jenga_dev
       WORKER_DB_URL: postgres://jenga_worker:worker_dev_pw@postgres:5432/jenga_dev
       ADMIN_DB_URL: postgres://jenga_migrator:migrator_dev_pw@postgres:5432/jenga_dev
+      # The migrate service owns migrations here; roles come from bootstrap.sql
+      # with the dev passwords the explicit URLs above expect.
+      MIGRATE_ON_BOOT: "false"
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET (openssl rand -hex 32)}
       DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:-${JWT_SECRET}}
       FISCAL_WORKER_ENABLED: "true"

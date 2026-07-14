@@ -1,3 +1,5 @@
+import { createHmac } from "node:crypto";
+
 /**
  * Environment configuration. Defaults target local development only;
  * production injects real values via secret management (05-security.md §3).
@@ -17,10 +19,20 @@ export function loadConfig(): AppConfig {
   if (isProd && jwtSecret.length < 32) {
     throw new Error("JWT_SECRET must be set (>=32 chars) in production");
   }
-  // Managed-platform mode (Render): derive the runtime-role URLs from the
-  // owner URL + generated passwords, so the blueprint needs zero manual URLs.
+  // Managed-platform mode (Render/Railway/any Docker host): derive the
+  // runtime-role URLs from the owner URL + role passwords. When no explicit
+  // password env exists, derive one from JWT_SECRET — the same derivation
+  // db/bootstrap-and-migrate.ts uses when provisioning the roles, so a
+  // platform needs only ADMIN_DB_URL + JWT_SECRET to be fully wired.
+  const derivedPw = (role: string): string | undefined =>
+    jwtSecret
+      ? createHmac("sha256", jwtSecret)
+          .update(`${role}-db-password`)
+          .digest("hex")
+      : undefined;
   const derive = (role: string, pw: string | undefined): string | null => {
     const admin = process.env.ADMIN_DB_URL;
+    pw = pw ?? derivedPw(role);
     if (!admin || !pw) return null;
     const u = new URL(admin);
     u.username = role;
