@@ -5,6 +5,7 @@
 export interface AppConfig {
   port: number;
   appDbUrl: string;
+  workerDbUrl: string;
   jwtSecret: string;
   accessTokenTtlSec: number;
   refreshTokenTtlDays: number;
@@ -21,6 +22,9 @@ export function loadConfig(): AppConfig {
     appDbUrl:
       process.env.APP_DB_URL ??
       "postgres://jenga_app:app_dev_pw@localhost:5432/jenga_dev",
+    workerDbUrl:
+      process.env.WORKER_DB_URL ??
+      "postgres://jenga_worker:worker_dev_pw@localhost:5432/jenga_dev",
     jwtSecret: jwtSecret || "dev-only-secret-do-not-use-in-production",
     accessTokenTtlSec: Number(process.env.ACCESS_TOKEN_TTL_SEC ?? 900),
     refreshTokenTtlDays: Number(process.env.REFRESH_TOKEN_TTL_DAYS ?? 30),

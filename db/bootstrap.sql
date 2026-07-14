@@ -16,6 +16,12 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'jenga_app') THEN
     CREATE ROLE jenga_app LOGIN PASSWORD 'app_dev_pw' NOBYPASSRLS;
   END IF;
+  -- Background fiscal worker: NOBYPASSRLS like the app role, but granted an
+  -- explicit cross-tenant policy on the fiscal queue tables ONLY (it must
+  -- drain the queue across tenants). It can touch nothing else.
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'jenga_worker') THEN
+    CREATE ROLE jenga_worker LOGIN PASSWORD 'worker_dev_pw' NOBYPASSRLS;
+  END IF;
 END
 $$;
 
