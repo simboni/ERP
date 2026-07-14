@@ -1,0 +1,54 @@
+# Render Blueprint: one-click pilot deployment (docs/deploy-render.md).
+# Creates managed Postgres + the API (with fiscal/notification workers on)
+# + the web app. One manual step after first deploy: run
+# db/bootstrap-managed.sql from the database's psql shell, then fill the
+# three DB URL env vars (Render cannot template per-role URLs).
+
+databases:
+  - name: jenga-db
+    plan: basic-256mb
+    postgresMajorVersion: "16"
+
+services:
+  - type: web
+    name: jenga-api
+    runtime: docker
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    preDeployCommand: node db-dist/migrate.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATA_ENCRYPTION_KEY
+        generateValue: true
+      - key: FISCAL_WORKER_ENABLED
+        value: "true"
+      - key: NOTIFY_WORKER_ENABLED
+        value: "true"
+      # Set after running db/bootstrap-managed.sql (see deploy-render.md):
+      - key: ADMIN_DB_URL
+        sync: false
+      - key: APP_DB_URL
+        sync: false
+      - key: WORKER_DB_URL
+        sync: false
+      # Set to the web service's public URL once known:
+      - key: WEB_ORIGINS
+        sync: false
+
+  - type: web
+    name: jenga-web
+    runtime: docker
+    dockerfilePath: ./apps/web/Dockerfile
+    dockerContext: .
+    plan: starter
+    envVars:
+      - key: NEXT_OUTPUT
+        value: standalone
+      # Set to the API service's public URL (build-time; triggers rebuild):
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
