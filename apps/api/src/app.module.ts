@@ -13,7 +13,7 @@ import { FISCAL_PROVIDER, FiscalService } from "./fiscal/fiscal.service";
 import { EtimsOscuProvider } from "./fiscal/oscu.provider";
 import { SandboxFiscalProvider } from "./fiscal/provider";
 import { DarajaPaymentProvider } from "./payments/daraja.provider";
-import { HealthController } from "./health.controller";
+import { HealthController, OpsController } from "./health.controller";
 import { InventoryController } from "./inventory/inventory.controller";
 import { InventoryService } from "./inventory/inventory.service";
 import { InvoicesController } from "./invoicing/invoices.controller";
@@ -62,6 +62,7 @@ import { TenantsController } from "./tenants/tenants.controller";
     InventoryController,
     ExportController,
     HealthController,
+    OpsController,
   ],
   providers: [
     DbService,

@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
+import { requestLogger } from "./common/request-logger";
 import { loadConfig } from "./config";
 
 async function bootstrap(): Promise<void> {
@@ -28,6 +29,7 @@ async function bootstrap(): Promise<void> {
       next();
     },
   );
+  app.use(requestLogger);
   app.enableShutdownHooks();
   const { port } = loadConfig();
   await app.listen(port);
