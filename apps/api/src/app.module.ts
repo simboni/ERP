@@ -18,6 +18,8 @@ import { InventoryController } from "./inventory/inventory.controller";
 import { InventoryService } from "./inventory/inventory.service";
 import { InvoicesController } from "./invoicing/invoices.controller";
 import { InvoicesService } from "./invoicing/invoices.service";
+import { QuotesService } from "./invoicing/quotes.service";
+import { SalesExtrasController } from "./invoicing/sales-extras.controller";
 import { LedgerService } from "./ledger/ledger.service";
 import {
   NOTIFICATION_PROVIDER,
@@ -54,6 +56,7 @@ import { TenantsController } from "./tenants/tenants.controller";
     TenantsController,
     FiscalController,
     InvoicesController,
+    SalesExtrasController,
     PaymentsController,
     MpesaWebhookController,
     PayrollController,
@@ -72,6 +75,7 @@ import { TenantsController } from "./tenants/tenants.controller";
     FiscalService,
     LedgerService,
     InvoicesService,
+    QuotesService,
     PaymentsService,
     PayrollService,
     ComplianceService,
