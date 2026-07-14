@@ -7,8 +7,11 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Res,
   UseGuards,
 } from "@nestjs/common";
+import type { Response } from "express";
+import { renderInvoicePdf } from "./invoice-pdf";
 import type { TenantTokenClaims } from "@jenga/shared";
 import {
   JwtAuthGuard,
@@ -160,6 +163,61 @@ export class InvoicesController {
       );
       return res.rows;
     });
+  }
+
+  @Get("invoices/:id/pdf")
+  async invoicePdf(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) invoiceId: string,
+    @Res() res: Response,
+  ) {
+    const data = await this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const inv = await client.query(
+        `SELECT i.*, c.name AS customer_name, c.kra_pin AS customer_pin,
+                t.name AS business_name,
+                f.status AS fiscal_status, f.control_number, f.qr_payload
+         FROM invoices i
+         JOIN customers c ON c.id = i.customer_id
+         JOIN tenants t ON t.id = i.tenant_id
+         LEFT JOIN fiscal_documents f ON f.id = i.fiscal_document_id
+         WHERE i.id = $1`,
+        [invoiceId],
+      );
+      if (!inv.rows[0]) throw new NotFoundException();
+      const lines = await client.query(
+        `SELECT description, quantity, unit_price_cents, vat_rate,
+                line_total_cents, vat_cents
+         FROM invoice_lines WHERE invoice_id = $1`,
+        [invoiceId],
+      );
+      return { ...inv.rows[0], lines: lines.rows };
+    });
+    const pdf = await renderInvoicePdf({
+      businessName: data.business_name,
+      invoiceNo: data.invoice_no,
+      status: data.status,
+      issueDate: data.issue_date
+        ? new Date(data.issue_date).toISOString().slice(0, 10)
+        : null,
+      customerName: data.customer_name,
+      customerPin: data.customer_pin,
+      lines: data.lines,
+      subtotalCents: Number(data.subtotal_cents),
+      vatCents: Number(data.vat_cents),
+      totalCents: Number(data.total_cents),
+      fiscal: {
+        controlNumber: data.control_number,
+        qrPayload: data.qr_payload,
+        status: data.fiscal_status,
+      },
+    });
+    res
+      .status(200)
+      .set({
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `inline; filename="invoice-${data.invoice_no ?? "draft"}.pdf"`,
+      })
+      .send(pdf);
   }
 
   @Get("invoices/:id")

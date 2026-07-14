@@ -130,6 +130,43 @@ export class AuthService {
     });
   }
 
+  /**
+   * Single-use rotation: a refresh token is revoked the moment it is used
+   * and a new one is issued. Reuse of a revoked token is treated as theft —
+   * every live token for that user is revoked (OWASP rotation guidance).
+   */
+  async refresh(
+    refreshToken: string,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    const tokenHash = createHash("sha256").update(refreshToken).digest("hex");
+    const res = await this.db.query(
+      `SELECT id, user_id, expires_at, revoked_at
+       FROM refresh_tokens WHERE token_hash = $1`,
+      [tokenHash],
+    );
+    const row = res.rows[0];
+    if (!row) throw new UnauthorizedException("Invalid refresh token");
+    if (row.revoked_at) {
+      await this.db.query(
+        `UPDATE refresh_tokens SET revoked_at = now()
+         WHERE user_id = $1 AND revoked_at IS NULL`,
+        [row.user_id],
+      );
+      throw new UnauthorizedException("Refresh token reuse detected; sessions revoked");
+    }
+    if (new Date(row.expires_at) < new Date()) {
+      throw new UnauthorizedException("Refresh token expired");
+    }
+    await this.db.query(
+      "UPDATE refresh_tokens SET revoked_at = now() WHERE id = $1",
+      [row.id],
+    );
+    const claims: UserTokenClaims = { sub: row.user_id, typ: "user" };
+    const accessToken = await this.jwt.signAsync(claims);
+    const newRefresh = await this.issueRefreshToken(row.user_id);
+    return { accessToken, refreshToken: newRefresh };
+  }
+
   private async issueRefreshToken(userId: string): Promise<string> {
     const token = randomBytes(32).toString("base64url");
     const tokenHash = createHash("sha256").update(token).digest("hex");

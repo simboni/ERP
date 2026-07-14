@@ -65,6 +65,15 @@ export class AuthController {
     return this.auth.login(body.email, body.password);
   }
 
+  @Post("refresh")
+  @HttpCode(200)
+  async refresh(@Body() body: { refreshToken?: string }) {
+    if (!body?.refreshToken) {
+      throw new BadRequestException("refreshToken is required");
+    }
+    return this.auth.refresh(body.refreshToken);
+  }
+
   @Post("tenant-token")
   @HttpCode(200)
   @UseGuards(JwtAuthGuard)
