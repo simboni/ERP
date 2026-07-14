@@ -1,10 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   api,
   clearTokens,
+  getApiBase,
   setTenantToken,
   setUserToken,
 } from "@/lib/api";
@@ -28,6 +29,20 @@ export default function AuthPage() {
   const [memberships, setMemberships] = useState<Membership[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [serverInfo, setServerInfo] = useState("checking server…");
+
+  useEffect(() => {
+    void (async () => {
+      const base = await getApiBase();
+      try {
+        const res = await fetch(`${base}/health`);
+        const ok = res.ok ? "✓ online" : `✗ HTTP ${res.status}`;
+        setServerInfo(`Server: ${base} ${ok}`);
+      } catch {
+        setServerInfo(`Server: ${base} ✗ unreachable`);
+      }
+    })();
+  }, []);
 
   const selectTenant = async (tenantId: string): Promise<void> => {
     const res = await api<{ accessToken: string }>("/auth/tenant-token", {
@@ -94,6 +109,7 @@ export default function AuthPage() {
     <>
       <h1>Jenga ERP</h1>
       <p className="muted"><LangToggle /></p>
+      <p className="muted" style={{ fontSize: "0.75rem" }}>{serverInfo}</p>
       <p className="muted">
         {t("tagline")}
       </p>
