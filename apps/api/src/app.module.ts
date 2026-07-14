@@ -5,6 +5,7 @@ import { AuthController } from "./auth/auth.controller";
 import { AuthService } from "./auth/auth.service";
 import { ComplianceController } from "./compliance/compliance.controller";
 import { ComplianceService } from "./compliance/compliance.service";
+import { ExportController } from "./compliance/export.controller";
 import { loadConfig } from "./config";
 import { DbService } from "./db/db.service";
 import { FiscalController } from "./fiscal/fiscal.controller";
@@ -59,6 +60,7 @@ import { TenantsController } from "./tenants/tenants.controller";
     ComplianceController,
     BillsController,
     InventoryController,
+    ExportController,
     HealthController,
   ],
   providers: [

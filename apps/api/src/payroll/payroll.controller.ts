@@ -21,6 +21,7 @@ import {
   TenantClaims,
   TenantContextGuard,
 } from "../auth/guards";
+import { encryptPii } from "../common/crypto";
 import { DbService } from "../db/db.service";
 import { seedDefaultAccounts } from "../ledger/ledger.service";
 import { PayrollService } from "./payroll.service";
@@ -66,7 +67,8 @@ export class PayrollController {
           body.fullName!.trim(),
           body.grossCents,
           body.kraPin?.trim() || null,
-          body.nationalId?.trim() || null,
+          // National IDs are encrypted at the application layer (05 §2).
+          body.nationalId?.trim() ? encryptPii(body.nationalId.trim()) : null,
           body.msisdn?.trim() || null,
         ],
       );
