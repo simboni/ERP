@@ -103,6 +103,14 @@ export class PaymentsController {
     });
   }
 
+  @Post("sweep-timeouts")
+  @Roles("owner", "admin", "accountant")
+  async sweepTimeouts(@TenantClaims() claims: TenantTokenClaims) {
+    return this.db.withTenant(claims.tid, claims.sub, (client) =>
+      this.payments.sweepTimeouts(client),
+    );
+  }
+
   @Post(":id/match")
   @Roles("owner", "admin", "accountant")
   async manualMatch(

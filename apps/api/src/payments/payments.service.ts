@@ -224,6 +224,29 @@ export class PaymentsService {
   }
 
   /**
+   * Mark stale pending STK payments timeout_reconciling. The verified
+   * Daraja pattern (02 §4): a payment can succeed AFTER the timeout, so
+   * these are never failed outright — they await a Transaction Status
+   * query (production Daraja adapter) or a late callback, either of which
+   * still confirms them. Runs per tenant; scheduled sweep joins the
+   * worker cadence when the production adapter lands.
+   */
+  async sweepTimeouts(
+    client: PoolClient,
+    olderThanMinutes = 3,
+  ): Promise<{ swept: number }> {
+    const res = await client.query(
+      `UPDATE payments
+       SET state = 'timeout_reconciling',
+           last_error = 'No callback within ' || $1 || ' minutes; awaiting status query'
+       WHERE state = 'pending'
+         AND created_at < now() - make_interval(mins => $1)`,
+      [olderThanMinutes],
+    );
+    return { swept: res.rowCount ?? 0 };
+  }
+
+  /**
    * Match a confirmed payment to an open invoice and post the receipt.
    * Match rule v1: account_ref parses to the invoice number (with optional
    * INV- prefix) AND amounts are exactly equal AND invoice is issued.

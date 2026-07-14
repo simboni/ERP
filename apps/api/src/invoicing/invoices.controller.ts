@@ -149,6 +149,28 @@ export class InvoicesController {
     );
   }
 
+  /** Corrections are credit notes, never edits — accountant-level action. */
+  @Post("invoices/:id/credit-note")
+  @Roles("owner", "admin", "accountant")
+  async creditNote(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) invoiceId: string,
+    @Body() body: { reason?: string },
+  ) {
+    if (!body?.reason?.trim()) {
+      throw new BadRequestException("reason is required");
+    }
+    return this.db.withTenant(claims.tid, claims.sub, (client) =>
+      this.invoices.creditNote(client, {
+        tenantId: claims.tid,
+        userId: claims.sub,
+        invoiceId,
+        reason: body.reason!.trim(),
+        date: new Date().toISOString().slice(0, 10),
+      }),
+    );
+  }
+
   @Get("invoices")
   async listInvoices(@TenantClaims() claims: TenantTokenClaims) {
     return this.db.withTenant(claims.tid, claims.sub, async (client) => {

@@ -116,6 +116,154 @@ export class InvoicesService {
     return { id: invoiceId };
   }
 
+  /**
+   * Full-reversal credit note (v1): reverses the invoice's ledger entry
+   * (and COGS/stock for item lines), fiscalizes a credit_note with KRA,
+   * and marks the invoice credited — one atomic transaction. Paid invoices
+   * leave the received money as an unallocated customer credit in AR
+   * (surfaced by the AR report; refunds via B2C are a follow-up).
+   */
+  async creditNote(
+    client: PoolClient,
+    args: {
+      tenantId: string;
+      userId: string;
+      invoiceId: string;
+      reason: string;
+      date: string;
+    },
+  ): Promise<{ creditNoteNo: number; fiscalDocumentId: string }> {
+    const invRes = await client.query(
+      `SELECT id, branch_id, customer_id, status, invoice_no,
+              subtotal_cents, vat_cents, total_cents
+       FROM invoices WHERE id = $1 FOR UPDATE`,
+      [args.invoiceId],
+    );
+    const inv = invRes.rows[0];
+    if (!inv) throw new NotFoundException("Invoice not found");
+    if (!["issued", "paid"].includes(inv.status)) {
+      throw new BadRequestException(
+        `Only issued or paid invoices can be credited (status: ${inv.status})`,
+      );
+    }
+    const subtotal = Number(inv.subtotal_cents);
+    const vat = Number(inv.vat_cents);
+    const total = Number(inv.total_cents);
+
+    await client.query(
+      "SELECT pg_advisory_xact_lock(hashtext('credit-note-no:' || $1))",
+      [args.tenantId],
+    );
+    const noRes = await client.query(
+      `SELECT coalesce(max(credit_note_no), 0) + 1 AS next
+       FROM credit_notes WHERE tenant_id = $1`,
+      [args.tenantId],
+    );
+    const creditNoteNo = Number(noRes.rows[0].next);
+
+    // Reverse the revenue posting: DR Sales, DR VAT / CR AR.
+    const lines = [
+      { accountCode: "4000", debitCents: subtotal, memo: `CN ${creditNoteNo}` },
+      { accountCode: "1100", creditCents: total, memo: `CN ${creditNoteNo}` },
+    ];
+    if (vat > 0) {
+      lines.push({ accountCode: "2200", debitCents: vat, memo: `CN ${creditNoteNo}` });
+    }
+    const posting = await this.ledger.post(client, {
+      tenantId: args.tenantId,
+      postedBy: args.userId,
+      entryDate: args.date,
+      memo: `Credit note ${creditNoteNo} for invoice ${inv.invoice_no}: ${args.reason}`,
+      sourceType: "credit_note",
+      sourceId: args.invoiceId,
+      idempotencyKey: `credit-note:${args.invoiceId}`,
+      lines,
+    });
+
+    // Restore stock and reverse COGS for catalogue-item lines.
+    if (this.inventory) {
+      const itemLines = await client.query(
+        `SELECT item_id, quantity FROM invoice_lines
+         WHERE invoice_id = $1 AND item_id IS NOT NULL`,
+        [args.invoiceId],
+      );
+      let cogsCents = 0;
+      for (const line of itemLines.rows as { item_id: string; quantity: string }[]) {
+        const qty = Number(line.quantity);
+        await this.inventory.recordMovement(client, {
+          tenantId: args.tenantId,
+          itemId: line.item_id,
+          branchId: inv.branch_id,
+          qtyDelta: qty,
+          reason: "adjustment",
+          refType: "credit_note",
+          refId: args.invoiceId,
+          userId: args.userId,
+        });
+        const item = await client.query(
+          "SELECT cost_cents FROM items WHERE id = $1",
+          [line.item_id],
+        );
+        cogsCents += Math.round(Number(item.rows[0].cost_cents) * qty);
+      }
+      if (cogsCents > 0) {
+        await this.ledger.post(client, {
+          tenantId: args.tenantId,
+          postedBy: args.userId,
+          entryDate: args.date,
+          memo: `COGS reversal for credit note ${creditNoteNo}`,
+          sourceType: "credit_note_cogs",
+          sourceId: args.invoiceId,
+          idempotencyKey: `credit-note-cogs:${args.invoiceId}`,
+          lines: [
+            { accountCode: "1200", debitCents: cogsCents },
+            { accountCode: "5000", creditCents: cogsCents },
+          ],
+        });
+      }
+    }
+
+    // Fiscalize the credit note with KRA.
+    const fiscalDoc = await this.fiscal.enqueue(client, args.tenantId, {
+      branchId: inv.branch_id,
+      docType: "credit_note",
+      idempotencyKey: `credit-note:${args.invoiceId}`,
+      payload: {
+        creditNoteNo,
+        originalInvoiceNo: Number(inv.invoice_no),
+        issueDate: args.date,
+        reason: args.reason,
+        subtotalCents: subtotal,
+        vatCents: vat,
+        totalCents: total,
+      },
+    });
+
+    const cnRes = await client.query(
+      `INSERT INTO credit_notes
+         (tenant_id, invoice_id, credit_note_no, reason, subtotal_cents,
+          vat_cents, total_cents, journal_entry_id, fiscal_document_id, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+      [
+        args.tenantId, args.invoiceId, creditNoteNo, args.reason,
+        subtotal, vat, total, posting.entryId, fiscalDoc.id, args.userId,
+      ],
+    );
+    await client.query(
+      "UPDATE invoices SET status = 'credited' WHERE id = $1",
+      [args.invoiceId],
+    );
+    await this.audit.record(client, {
+      tenantId: args.tenantId,
+      actorUserId: args.userId,
+      action: "invoice.credited",
+      entityType: "credit_note",
+      entityId: cnRes.rows[0].id,
+      payload: { creditNoteNo, invoiceNo: Number(inv.invoice_no), reason: args.reason },
+    });
+    return { creditNoteNo, fiscalDocumentId: fiscalDoc.id };
+  }
+
   async issue(
     client: PoolClient,
     args: { tenantId: string; userId: string; invoiceId: string; issueDate: string },
