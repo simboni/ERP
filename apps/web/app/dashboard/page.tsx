@@ -94,6 +94,11 @@ export default function Dashboard() {
         </div>
       </div>
 
+      <p>
+        <Link href="/payments">Payments</Link> ·{" "}
+        <Link href="/payroll">Payroll</Link>
+      </p>
+
       <h2>
         Invoices{" "}
         <Link href="/invoices/new" style={{ fontSize: "0.9rem" }}>
