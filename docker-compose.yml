@@ -1,0 +1,59 @@
+# Local/staging stack: postgres + migrations + api (fiscal worker on) + web.
+#   JWT_SECRET=$(openssl rand -hex 32) docker compose up --build
+# Dev-only default passwords; production injects real secrets (05-security §3).
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/bootstrap.sql:/docker-entrypoint-initdb.d/10-bootstrap.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["node", "db-dist/migrate.js"]
+    environment:
+      ADMIN_DB_URL: postgres://jenga_migrator:migrator_dev_pw@postgres:5432/jenga_dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      APP_DB_URL: postgres://jenga_app:app_dev_pw@postgres:5432/jenga_dev
+      WORKER_DB_URL: postgres://jenga_worker:worker_dev_pw@postgres:5432/jenga_dev
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET (openssl rand -hex 32)}
+      FISCAL_WORKER_ENABLED: "true"
+      WEB_ORIGINS: http://localhost:3001
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:3000
+    ports:
+      - "3001:3001"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
