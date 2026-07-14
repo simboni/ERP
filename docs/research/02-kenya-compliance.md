@@ -131,27 +131,50 @@ Monthly bands (in force since Finance Act 2023, unchanged through Jan 2026 ⚠�
 
 ## 3. Data Protection Act 2019 (DPA) & ODPC obligations
 
-- **Registration:** Data controllers/processors must register with the ODPC (Registration
-  Regulations 2021) unless exempt (annual turnover below KES 5M **and** fewer than 10
-  employees — with sector carve-outs that void the exemption ⚠️ VERIFY our SaaS falls
-  outside carve-outs; as a payroll processor we almost certainly must register).
-  Registration renews every ⚠️ VERIFY (24 months baseline).
+*Verified July 2026 against ODPC regulations/guidance and legal advisories.*
+
+- **Registration (VERIFIED):** Data controllers/processors must register with the ODPC
+  (Registration Regulations 2021, LN 265/2021) unless exempt — exemption requires **both**
+  annual turnover below KES 5M **and** fewer than 10 employees, and is **void for listed
+  sectors** regardless of size (financial services, telecoms, health, education,
+  hospitality, transport, betting, property, direct marketing…). Processing tenant
+  payroll/financial data puts us firmly in scope — **we must register**. Certificate
+  valid **24 months**, renewable. Current fees: micro/small KES 4,000 (renewal 2,000);
+  medium (51–99 staff, KES 5–50M) 16,000/9,000; large (>99 staff, >KES 50M)
+  40,000/25,000 — one fee covers both controller and processor roles.
+  [official: odpc.go.ke LN 265/2021 + ODPC Guidance Note on Registration;
+  advisory: dlapiperdataprotection.com (KE), koassociates.co.ke]
 - **Roles:** We are a **data processor** for tenant employee/customer data and a
   **controller** for our own account data — contracts (DPAs with tenants) must reflect both.
-- **Cross-border transfers (ss. 48–49):** permitted with appropriate safeguards
-  (contractual, adequacy, or consent). There is **no general data-localization mandate**
-  for ordinary business data; s.50 allows the Cabinet Secretary to require local
-  processing for **strategic interests** (civil registration data must be processed
-  in-country). Hosting in **AWS af-south-1 (Cape Town)** with standard safeguards is the
-  recommended posture ⚠️ VERIFY current ODPC guidance notes and any new s.50 gazettes.
+- **Cross-border transfers (VERIFIED):** ss.48–49 permit transfers with appropriate
+  safeguards/adequacy/necessity (sensitive data additionally needs data-subject consent +
+  confirmed safeguards). There is **no general data-localization mandate** for ordinary
+  business data; s.50 + General Regulations 2021 restrict only **"strategic interests of
+  the state"** processing (civil registration, elections, national ID, revenue
+  administration, etc.) to Kenyan data centres (or at least one serving copy in-country).
+  Hosting in **AWS af-south-1 (Cape Town)** with SCC-style contractual safeguards,
+  encryption, and a documented transfer basis is lawful and remains the recommended
+  posture. **Watch items:** ODPC **draft Guidance Note on Cross-Border Data Transfers
+  (13 Apr 2026, consultation closed 15 May 2026, still draft)** — formalizes the four
+  transfer bases and flags "high-risk" transfers as potentially needing ODPC approval.
+  [official: ODPC General Regulations 2021 + draft 2026 Guidance Note; advisory: cms.law]
 - **Data subject rights:** access, rectification, erasure, objection, portability —
   tenant-facing DSR tooling required.
-- **Breach notification:** to ODPC **within 72 hours** of becoming aware (and to data
-  subjects where there is real risk of harm).
-- **Penalties:** up to **KES 5,000,000 or 1% of annual turnover** (whichever is lower)
-  per infringement ⚠️ VERIFY, plus reputational/enforcement actions.
-- **DPIA:** required for high-risk processing — payroll and financial profiling likely
-  qualify; run one before payroll GA.
+- **Breach notification (VERIFIED):** controller → ODPC **within 72 hours** of becoming
+  aware (where real risk of harm); **processor → controller within 48 hours** (relevant
+  to us as processor!); data subjects notified in writing within a reasonably practical
+  period. [official: DPA s.43; advisory: cms.law]
+- **Penalties (VERIFIED):** administrative fines up to **KES 5,000,000 or 1% of annual
+  turnover, whichever is LOWER** (DPA s.63); separate criminal offences up to KES 3M
+  and/or 10 years. **Watch item:** the **Data Protection (Amendment) Bill 2025** (before
+  Parliament as of mid-2026) proposes flipping this to whichever is **HIGHER**, an
+  appeals tribunal, and expanded sensitive-data categories — track to enactment.
+  [advisory: wamaeallen.com, manwaadvocates.com]
+- **DPIA (VERIFIED):** required for high-risk processing (s.31); General Regulations
+  require the DPIA report to be submitted to the Data Commissioner **at least 60 days
+  before processing begins**. Payroll in a multi-tenant ERP is the standard advisory
+  example of high-risk processing — **schedule the DPIA ≥60 days before payroll GA**
+  (roadmap Phase 3 dependency). [official: General Regulations 2021]
 
 **Product consequences:** tenant data isolation (RLS + tested cross-tenant controls),
 encryption at rest and in transit, granular consent/purpose records, DSR endpoints,
@@ -161,21 +184,36 @@ audit logs, breach-response runbook, ODPC registration before first paying tenan
 
 ## 4. M-Pesa / mobile money integration (Safaricom Daraja)
 
-- **Core APIs:** M-Pesa Express (STK Push) for customer-present collection; **C2B**
-  (register validation/confirmation URLs) for paybill/till collections; **B2C** for
-  payouts (salaries, refunds, supplier disbursement); **B2B** (incl. pay-bill-to-pay-bill);
-  **Transaction Status**, **Account Balance**, **Reversal**; **Dynamic QR**; Tax
-  Remittance API ⚠️ VERIFY current availability tiers.
-- **Auth model:** OAuth (consumer key/secret) → bearer token; B2C/B2B require the
-  initiator **security credential** (password RSA-encrypted with Safaricom's public
-  cert). Production go-live requires app review and a **public HTTPS callback**
-  infrastructure; callbacks are asynchronous — the integration must be
-  **idempotent**, persist a pending state, and reconcile timeouts via Transaction Status
-  queries (payments can succeed after a timeout).
-- **Aggregators (Kopo Kopo, Pesapal, IntaSend, Flutterwave):** commonly used to shortcut
-  Safaricom onboarding and to add card/bank rails; trade-off is per-transaction fees and
-  an added dependency. **Decision:** integrate Daraja directly for M-Pesa (it is our
-  flagship differentiator and margin matters), keep an aggregator adapter interface for
+*Verified July 2026 (official portal corroborated via convergent secondary sources —
+developer.safaricom.co.ke blocks automated reads; re-confirm in the portal at build time).*
+
+- **Core APIs (VERIFIED catalogue):** M-Pesa Express (STK Push) + **Express Query**;
+  **C2B** (Register URL with validation/confirmation callbacks) for paybill/till
+  collections; **B2C** payouts (salaries, refunds, disbursements); **B2B**
+  (BusinessPayBill/BusinessBuyGoods) and **B2B Express Checkout** (USSD push so another
+  business pays till-to-paybill); **Transaction Status**, **Account Balance**,
+  **Reversal**; **Dynamic QR**; **Tax Remittance** (to KRA); **M-Pesa Ratiba** (standing
+  orders/recurring — useful for our own subscription billing); plus **Bill Manager** and
+  **B2C Account Top-Up**. [official: developer.safaricom.co.ke/apis]
+- **Auth model (VERIFIED):** OAuth (consumer key/secret) → time-bound bearer token;
+  B2C/B2B/Status/Reversal/Balance additionally require an **Initiator + SecurityCredential**
+  (initiator password RSA-encrypted with Safaricom's public certificate — **sandbox and
+  production certificates differ**; re-encrypt at go-live). Callbacks must be **public
+  HTTPS** endpoints. Go-live is tied to a live PayBill/Till and org-portal admin
+  verification; **as of May 2025 Safaricom is moving Daraja onboarding/go-live to a
+  fully self-service model**, reducing manual review friction — good news for our
+  Phase 0 timeline.
+- **Async handling (VERIFIED pattern):** all payment results arrive via async callbacks
+  (ResultURL/QueueTimeoutURL); STK processing can take ~60s and **payments can succeed
+  after your timeout**. Required design: ack callbacks with 200 immediately and process
+  async; **idempotent handlers** deduped on MpesaReceiptNumber/CheckoutRequestID
+  (Safaricom may redeliver callbacks); Transaction Status / Express Query sweeps for
+  missed callbacks; periodic reconciliation of pending payments. (Matches 04 §5 design.)
+- **Aggregators (VERIFIED):** Kopo Kopo, Pesapal, IntaSend, Flutterwave (also DPO Pay,
+  Paystack) are widely used to shortcut onboarding and add **card/bank rails**, at
+  ~1.4–3.8% per-transaction fees. **Decision stands:** integrate Daraja directly for
+  M-Pesa (flagship differentiator; margin matters — and self-service go-live lowers the
+  onboarding cost that justified aggregators), keep an aggregator adapter interface for
   cards/other rails.
 - **Reconciliation (the killer feature):** every C2B confirmation and statement line is
   matched to open invoices automatically (amount + account reference + fuzzy payer
