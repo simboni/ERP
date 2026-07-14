@@ -12,6 +12,12 @@ import { HealthController } from "./health.controller";
 import { InvoicesController } from "./invoicing/invoices.controller";
 import { InvoicesService } from "./invoicing/invoices.service";
 import { LedgerService } from "./ledger/ledger.service";
+import {
+  MpesaWebhookController,
+  PaymentsController,
+} from "./payments/payments.controller";
+import { PAYMENT_PROVIDER, PaymentsService } from "./payments/payments.service";
+import { SandboxPaymentProvider } from "./payments/provider";
 import { RulesService } from "./rules/rules.service";
 import { TenantsController } from "./tenants/tenants.controller";
 
@@ -28,6 +34,8 @@ import { TenantsController } from "./tenants/tenants.controller";
     TenantsController,
     FiscalController,
     InvoicesController,
+    PaymentsController,
+    MpesaWebhookController,
     HealthController,
   ],
   providers: [
@@ -38,6 +46,8 @@ import { TenantsController } from "./tenants/tenants.controller";
     FiscalService,
     LedgerService,
     InvoicesService,
+    PaymentsService,
+    { provide: PAYMENT_PROVIDER, useClass: SandboxPaymentProvider },
     // Swapped for the real KRA OSCU/VSCU adapter once integrator
     // certification grants credentials (roadmap Phase 0).
     { provide: FISCAL_PROVIDER, useClass: SandboxFiscalProvider },
