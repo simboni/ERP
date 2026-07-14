@@ -4,7 +4,44 @@ import { AppModule } from "./app.module";
 import { requestLogger } from "./common/request-logger";
 import { loadConfig } from "./config";
 
+/**
+ * Verify the runtime DB role actually connects before booting. If it
+ * cannot (managed PG refused role provisioning) and an owner URL exists,
+ * fall back to it with a loud warning: FORCE RLS keeps every tenant
+ * policy binding even for the table owner, so tenant isolation holds —
+ * only role-level defence-in-depth (and the cross-tenant queue workers)
+ * degrade until roles are provisioned per docs/deploy-render.md.
+ */
+async function preflightDb(): Promise<void> {
+  const { Client } = await import("pg");
+  const cfg = loadConfig();
+  const probe = new Client({
+    connectionString: cfg.appDbUrl,
+    connectionTimeoutMillis: 8000,
+  });
+  try {
+    await probe.connect();
+    await probe.end();
+  } catch (err) {
+    await probe.end().catch(() => undefined);
+    if (process.env.ADMIN_DB_URL) {
+      console.error(
+        "WARNING: runtime DB role connection failed " +
+          `(${err instanceof Error ? err.message : err}); ` +
+          "falling back to the owner connection. Tenant isolation remains " +
+          "enforced by FORCE ROW LEVEL SECURITY, but provision jenga_app/" +
+          "jenga_worker (docs/deploy-render.md) to restore full separation.",
+      );
+      process.env.APP_DB_URL = process.env.ADMIN_DB_URL;
+      process.env.WORKER_DB_URL = process.env.ADMIN_DB_URL;
+    } else {
+      throw err;
+    }
+  }
+}
+
 async function bootstrap(): Promise<void> {
+  await preflightDb();
   const app = await NestFactory.create(AppModule);
   // WEB_ORIGINS explicit, or WEB_ORIGIN_HOST auto-injected by the platform
   // blueprint (hostname only), else local dev. On Render, additionally

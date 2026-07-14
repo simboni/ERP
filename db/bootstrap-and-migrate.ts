@@ -45,15 +45,26 @@ async function main(): Promise<void> {
           );
         }
       } catch (err) {
-        throw new Error(
-          `Could not provision role ${role}: ${err instanceof Error ? err.message : err}. ` +
-            `If this managed Postgres denies CREATEROLE, run db/bootstrap-managed.sql ` +
-            `manually per docs/deploy-render.md.`,
+        // NEVER fail the deploy on role provisioning: the API preflight
+        // falls back to the owner connection (FORCE RLS still walls
+        // tenants) and logs how to fix. Migrations below must still run.
+        console.warn(
+          `WARNING: could not provision role ${role} ` +
+            `(${err instanceof Error ? err.message : err}). ` +
+            `Run db/bootstrap-managed.sql manually per docs/deploy-render.md ` +
+            `to restore role-level defence-in-depth.`,
+        );
+        continue;
+      }
+      try {
+        await client.query(`GRANT CONNECT ON DATABASE "${dbName}" TO ${role}`);
+      } catch (err) {
+        console.warn(
+          `WARNING: could not grant connect to ${role}: ${err instanceof Error ? err.message : err}`,
         );
       }
-      await client.query(`GRANT CONNECT ON DATABASE "${dbName}" TO ${role}`);
     }
-    console.log("roles ready: jenga_app, jenga_worker");
+    console.log("role provisioning done");
   } finally {
     await client.end();
   }
