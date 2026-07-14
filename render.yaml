@@ -1,7 +1,8 @@
-# Render Blueprint — ZERO-TOUCH deploy (docs/deploy-render.md).
-# The API's pre-deploy step provisions its own runtime DB roles (passwords
-# auto-generated below) and runs migrations; connection URLs and CORS/API
-# hosts are derived automatically. Click "Apply" and wait for green.
+# Render Blueprint — SINGLE SERVICE, single origin (docs/deploy-render.md).
+# One container serves the API and the web app together: no service
+# discovery, no CORS, no cross-service env plumbing — nothing to race.
+# The pre-deploy step provisions DB roles + runs migrations; every guard
+# degrades gracefully and reports via /health instead of failing a deploy.
 
 databases:
   - name: jenga-db
@@ -32,27 +33,7 @@ services:
         fromDatabase:
           name: jenga-db
           property: connectionString
-      - key: WEB_ORIGIN_HOST
-        fromService:
-          type: web
-          name: jenga-web
-          property: host
       - key: FISCAL_WORKER_ENABLED
         value: "true"
       - key: NOTIFY_WORKER_ENABLED
         value: "true"
-
-  - type: web
-    name: jenga-web
-    runtime: docker
-    dockerfilePath: ./apps/web/Dockerfile
-    dockerContext: .
-    plan: starter
-    envVars:
-      - key: NEXT_OUTPUT
-        value: standalone
-      - key: API_HOST
-        fromService:
-          type: web
-          name: jenga-api
-          property: host

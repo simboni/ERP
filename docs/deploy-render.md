@@ -1,8 +1,9 @@
 # Deploying the Pilot on Render
 
-Render hosts the API + web as Docker services and provides the managed
-PostgreSQL. Total time: ~20 minutes. Cost: two Starter services + Basic
-Postgres (or the free DB tier for a short demo).
+ONE service + one database. The API container also serves the web app
+(same origin): no CORS, no service discovery, no cross-service env vars —
+the whole platform is a single URL. Cost: one Starter service + Basic
+Postgres.
 
 ## Zero-touch deploy
 
@@ -13,13 +14,11 @@ Postgres (or the free DB tier for a short demo).
    creates the two runtime DB roles with auto-generated passwords, then runs
    every migration; connection URLs, CORS origin and the web app's API URL
    are all derived automatically from the blueprint's service links.
-3. Verify: `https://jenga-api-XXXX.onrender.com/health` → `{"status":"ok"}`,
-   then open the jenga-web URL, sign up, and issue your first sandbox
-   invoice.
-
-Deploy order note: the web service may build before the API's hostname
-exists on the very first apply — if the web app can't reach the API, just
-Manual Deploy jenga-web once; it rebuilds with the API host injected.
+3. Open `https://jenga-api.onrender.com` — that single URL is the whole
+   platform (login page served by the API itself). `/health` on the same
+   URL reports `{"status":"ok","db":"ok"}` when everything is wired.
+4. Syncing from the old two-service layout? Render will propose deleting
+   the obsolete `jenga-web` service — approve it.
 
 Manual fallback: if a managed Postgres denies CREATEROLE (Render's does
 not), run `db/bootstrap-managed.sql` per its header comment and set

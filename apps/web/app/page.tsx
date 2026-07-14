@@ -34,12 +34,16 @@ export default function AuthPage() {
   useEffect(() => {
     void (async () => {
       const base = await getApiBase();
+      const shown = base || window.location.origin;
       try {
         const res = await fetch(`${base}/health`);
-        const ok = res.ok ? "✓ online" : `✗ HTTP ${res.status}`;
-        setServerInfo(`Server: ${base} ${ok}`);
+        const body = (await res.json().catch(() => ({}))) as { db?: string };
+        const ok = res.ok
+          ? body.db === "ok" ? "✓ online" : `⚠ ${body.db ?? "degraded"}`
+          : `✗ HTTP ${res.status}`;
+        setServerInfo(`Server: ${shown} ${ok}`);
       } catch {
-        setServerInfo(`Server: ${base} ✗ unreachable`);
+        setServerInfo(`Server: ${shown} ✗ unreachable`);
       }
     })();
   }, []);

@@ -156,7 +156,7 @@ export default function Dashboard() {
             <tbody>
               {invoices.map((i) => (
                 <tr key={i.id}>
-                  <td><Link href={`/invoices/${i.id}`}>{i.invoice_no ?? "draft"}</Link></td>
+                  <td><Link href={`/invoices/view?id=${i.id}`}>{i.invoice_no ?? "draft"}</Link></td>
                   <td>{i.customer_name}</td>
                   <td>{fmtKes(i.total_cents)}</td>
                   <td>

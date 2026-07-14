@@ -1,5 +1,8 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
+import express from "express";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { AppModule } from "./app.module";
 import { requestLogger } from "./common/request-logger";
 import { loadConfig } from "./config";
@@ -83,6 +86,13 @@ async function bootstrap(): Promise<void> {
     },
   );
   app.use(requestLogger);
+  // SINGLE-ORIGIN deploy: serve the exported web app from this process.
+  // Same origin as the API => no CORS, no service discovery, one URL.
+  const webDir = process.env.WEB_DIST ?? join(__dirname, "..", "web");
+  if (existsSync(webDir)) {
+    app.use(express.static(webDir, { extensions: ["html"] }));
+    console.log(`serving web app from ${webDir}`);
+  }
   app.enableShutdownHooks();
   const { port } = loadConfig();
   await app.listen(port);

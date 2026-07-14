@@ -107,7 +107,7 @@ export default function QuotesPage() {
         `/tenants/current/quotes/${id}/convert`,
         { method: "POST" },
       );
-      router.push(`/invoices/${r.invoiceId}`);
+      router.push(`/invoices/view?id=${r.invoiceId}`);
     });
 
   return (
@@ -171,7 +171,7 @@ export default function QuotesPage() {
                       </button>
                     )}
                     {q.invoice_id && (
-                      <Link href={`/invoices/${q.invoice_id}`}>invoice →</Link>
+                      <Link href={`/invoices/view?id=${q.invoice_id}`}>invoice →</Link>
                     )}
                   </td>
                 </tr>

@@ -4,40 +4,27 @@
  * Minimal API client for the Jenga API. Tokens live in sessionStorage for
  * v0 (httpOnly-cookie session lands with the BFF hardening pass).
  */
+/**
+ * SINGLE-ORIGIN architecture: in production the API serves this app, so
+ * the base is simply "" (same origin) — no discovery, no CORS, nothing to
+ * misconfigure. Explicit NEXT_PUBLIC_API_URL still wins; the two-port
+ * local dev setup (web :3001, api :3000) is auto-detected.
+ */
+export function getApiBaseSync(): string {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+  if (typeof window !== "undefined") {
+    if (window.location.port === "3001") return "http://localhost:3000"; // dev
+    return ""; // same origin
+  }
+  return "http://localhost:3000";
+}
+
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
-let resolvedBase: string | null = process.env.NEXT_PUBLIC_API_URL ?? null;
-
-/**
- * Resolve the API base: build-time value if baked in, else the server's
- * runtime config (survives deploy-order races on Render), else local dev.
- */
+/** Async signature kept for existing call sites. */
 export async function getApiBase(): Promise<string> {
-  if (resolvedBase) return resolvedBase;
-  try {
-    const res = await fetch("/api/config");
-    const cfg = (await res.json()) as { apiUrl: string | null };
-    if (cfg.apiUrl) {
-      resolvedBase = cfg.apiUrl;
-      return resolvedBase;
-    }
-  } catch {
-    // fall through
-  }
-  // Blueprint convention: both services share one blueprint with fixed
-  // names, so the API is this page's own host with the service name
-  // swapped (jenga-web.onrender.com -> jenga-api.onrender.com). Works
-  // even when platform env injection fails entirely.
-  if (typeof window !== "undefined") {
-    const host = window.location.hostname;
-    if (host.includes("jenga-web")) {
-      resolvedBase = `https://${host.replace("jenga-web", "jenga-api")}`;
-      return resolvedBase;
-    }
-  }
-  resolvedBase = "http://localhost:3000";
-  return resolvedBase;
+  return getApiBaseSync();
 }
 
 export function getUserToken(): string | null {
@@ -71,7 +58,7 @@ export async function api<T>(
   opts: { method?: string; body?: unknown; token?: string | null } = {},
 ): Promise<T> {
   const token = opts.token ?? getTenantToken() ?? getUserToken();
-  const base = await getApiBase();
+  const base = getApiBaseSync();
   let res: Response;
   try {
     res = await fetch(`${base}${path}`, {

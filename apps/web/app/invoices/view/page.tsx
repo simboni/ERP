@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { api, getApiBase, fmtKes, getTenantToken } from "@/lib/api";
 
 interface InvoiceDetail {
@@ -27,9 +27,9 @@ interface InvoiceDetail {
   }[];
 }
 
-export default function InvoicePage() {
+function InvoiceView() {
   const router = useRouter();
-  const { id } = useParams<{ id: string }>();
+  const id = useSearchParams().get("id") ?? "";
   const [inv, setInv] = useState<InvoiceDetail | null>(null);
   const [msisdn, setMsisdn] = useState("");
   const [creditReason, setCreditReason] = useState("");
@@ -176,5 +176,13 @@ export default function InvoicePage() {
         </div>
       )}
     </>
+  );
+}
+
+export default function InvoicePage() {
+  return (
+    <Suspense fallback={<p className="muted">Loading…</p>}>
+      <InvoiceView />
+    </Suspense>
   );
 }
