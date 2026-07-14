@@ -99,8 +99,11 @@ pilot cohort; support load < 0.5 tickets/tenant/month.
 
 ## Immediate next actions (this week)
 
-1. Re-verify the ⚠️ items in 02 (scheduled research pass) and freeze the compliance baseline.
-2. Apply for KRA eTIMS sandbox/integrator onboarding and Safaricom Daraja accounts.
+1. ~~Re-verify the flagged items in 02~~ **Done (July 2026)** — compliance baseline is
+   verified and frozen; next review at the Finance Act 2027 cycle or on gazette alerts.
+2. Apply for KRA eTIMS sandbox/integrator onboarding (note: certification requires
+   **≥3 qualified technical staff** — factor into hiring) and Safaricom Daraja accounts
+   (now self-service go-live).
 3. Draft the discovery interview script from 01 §2's hypothesis table.
 4. Scaffold the monorepo (NestJS + Next.js + Terraform skeleton) with the RLS tenancy
    core and CI gates — the first engineering PR of the flagship.

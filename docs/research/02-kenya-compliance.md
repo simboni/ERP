@@ -1,10 +1,13 @@
 # 02 — Kenya Compliance Requirements for the ERP
 
-**Status:** Drafted from knowledge base current to **January 2026**. Live web verification
-of the flagged figures was queued (session research quota) — every item marked
-⚠️ VERIFY must be confirmed against the cited official source before the module that
-implements it ships. Statutory figures change with Finance Acts and gazette notices, so
-this document must be re-reviewed **every July (Finance Act cycle) and on every gazette
+**Status:** **VERIFIED July 2026.** Initially drafted from a January-2026 knowledge
+baseline, then every flagged figure was verified/corrected via targeted research against
+official sources (KRA, NSSF, NITA, ODPC, Kenya Law, Ministry of Labour) and top-tier
+advisories (PwC, KPMG, EY, Bowmans, CDH, RSM, Vialto). Access note: several official
+sites block automated reads, so some verifications rest on search-indexed official-page
+content corroborated by convergent advisories — re-confirm exact statutory wording when
+implementing. Statutory figures change with Finance Acts and gazette notices, so this
+document must be re-reviewed **every July (Finance Act cycle) and on every gazette
 alert**.
 
 **Architectural rule this document imposes:** all rates, bands, thresholds and levies
@@ -15,45 +18,79 @@ never hard-coded — so a gazette change is a data update, not a code release.
 
 ## 1. KRA eTIMS (electronic Tax Invoice Management System)
 
-### 1.1 Who must comply
-- All **VAT-registered** businesses must issue electronic tax invoices through eTIMS.
-- Finance Act 2023 (amending the Income Tax Act): from **1 January 2024**, business
-  expenses **not supported by an eTIMS-generated invoice are not deductible** for income
-  tax — this pulled effectively *all* businesses (including non-VAT) into the system,
-  because their B2B customers demand eTIMS invoices.
-- Tax Procedures (Amendment) Act 2024 introduced relief for small suppliers
-  (turnover below **KES 5M** ⚠️ VERIFY current threshold/status and the buyer-initiated
-  "reverse invoicing" mechanism that lets buyers self-generate eTIMS invoices for
-  small suppliers).
-- ⚠️ VERIFY: Finance Act 2025/2026 changes, and the reported KRA move to validate
-  income-tax returns against eTIMS data (an "income/expense validation engine").
+*Verified July 2026 against KRA public notices/guides, Kenya Law gazette texts, and
+big-4/law-firm advisories (PwC, KPMG, EY, Bowmans, CDH, RSM).*
 
-### 1.2 Integration options (what our ERP must implement)
-KRA offers several compliance routes; the ones relevant to an ERP vendor:
+### 1.1 Who must comply — VERIFIED
+- Finance Act 2023 (TPA **s.23A**, effective 1 Sep 2023): **all persons carrying on
+  business** — including non-VAT-registered — must generate and transmit invoices via
+  eTIMS. [official: KRA notices 2071/2077]
+- From **1 Jan 2024**, expenses **not supported by an eTIMS invoice are non-deductible**
+  for income tax (carve-outs: emoluments, imports, interest, investment allowances,
+  airline ticketing, final-WHT payments — Finance Act 2025 added final-WHT to this list).
+- **Small-supplier (< KES 5M turnover) relief — CONTESTED, treat as hollow:** enacted
+  27 Dec 2024 (Tax Laws/Procedures Amendment Acts 2024) together with **s.23A(3A)
+  buyer-initiated (reverse) invoicing**; KRA published **BII Guidelines on 25 Mar 2025**
+  (buyer generates the invoice via eCitizen; seller accepts/rejects within **30 days**).
+  KRA has pushed to scrap the exemption since Apr 2025 and 2026 advisories state all
+  businesses must onboard (micro-traders via eTIMS Lite Web/USSD *222#). **Design
+  assumption: every supplier needs an eTIMS invoice path** — own device, eTIMS Lite, or
+  BII. [official: kenyalaw.org Act 21/2024, KRA BII page; advisory: Bowmans, KPMG, Fonoa]
+- **Return validation engine — CONFIRMED LIVE:** per KRA public notice 2323, effective
+  **1 Jan 2026** income-tax returns (from 2025 year of income) are **validated on iTax
+  submission against eTIMS invoice data, WHT data, and customs records**; expenses must
+  be backed by e-invoices carrying the **buyer's PIN**. Non-compliant books now produce
+  rejected returns — this is the strongest commercial tailwind for compliance-native ERP.
+  [official: KRA notice 2323; advisory: EY, BDO, KPMG]
+
+### 1.2 Integration options (what our ERP must implement) — VERIFIED
+KRA's system-to-system routes for a "Trader Invoicing System" (TIS):
 
 | Route | What it is | Our use |
 |---|---|---|
-| **VSCU** (Virtual Sales Control Unit) | Software SDK/service embedded in the taxpayer's system for high-volume, system-to-system invoicing | Primary route for our core invoicing engine ⚠️ VERIFY current certification process |
-| **OSCU** (Online Sales Control Unit) | Online control unit for systems that are always connected; invoices signed via KRA online component | Alternative/complement to VSCU |
-| **eTIMS Lite / web & USSD** | KRA's own free tools for micro-taxpayers | Not our route, but informs the UX bar |
-| **Third-party integrator certification** | KRA approves system-to-system integrators; sandbox testing then production approval | We must complete this as a vendor ⚠️ VERIFY current onboarding steps & timelines |
+| **OSCU** (Online Sales Control Unit) | Always-online, real-time invoice-signing API | Primary for cloud tenants |
+| **VSCU** (Virtual Sales Control Unit) | High-volume/bulk invoicing; **offline-capable** with later transmission | Primary for POS/offline mode (pairs with 04 §6) |
+| **eTIMS Lite / web & USSD (*222#)** | KRA's free tools for micro-taxpayers | Not our route; sets the UX bar and serves BII counterparties |
+| **Third-party integrator certification** | Sandbox testing → vetting → interim approval → production listing | Required for us as a vendor |
 
-Technical notes (validate in sandbox):
-- Device/branch initialization, item registration with **classification codes**
-  (UNSPSC-derived), customer PIN capture, invoice + credit-note flows, and stock
-  movement reporting are part of the OSCU/VSCU API surface.
-- Invoices must carry KRA-required fields: seller PIN, control-unit invoice number,
-  **QR code** for verification, SCU ID, buyer PIN (for B2B deductibility), timestamps.
-- Transmission is real-time/near-real-time when online; the spec provides for offline
-  queuing with sequence integrity ⚠️ VERIFY offline rules and maximum offline window.
+**Certification process (VERIFIED):** (1) sign up on the eTIMS portal selecting
+OSCU/VSCU; (2) develop and test against the **KRA sandbox** per the API specs;
+(3) apply with the **eTIMS Bio Data Form**, business registration docs, proof of
+**≥3 qualified technical staff**, notarized solvency declaration, and
+technology-architecture documentation; (4) vetting + demo of test cases; (5) interim
+approval certificate → production credentials and listing. **No official SLA** —
+practitioner reports suggest weeks to ~3 months; start in Phase 0 (roadmap) and staff
+accordingly (the 3-technical-staff requirement is a hiring-plan constraint).
+[official: KRA system-to-system page, OSCU/VSCU sign-up guide, Bio Data form]
 
-### 1.3 Penalties
-- Failure to issue an electronic tax invoice: penalties under the VAT Act / Tax
-  Procedures Act (historically **2× the tax due** or KES-scale fixed penalties)
-  ⚠️ VERIFY current figures.
-- Practical penalty: **customer's expense is non-deductible without our invoice** — for
-  the ERP this means eTIMS availability is a P0 reliability concern; an outage stops the
-  customer's sales legally, not just operationally.
+Technical notes:
+- API surface: device/branch initialization, item registration with classification
+  codes, customer PIN capture, invoice + credit-note flows, stock movement reporting.
+- Required invoice fields (ETI Regulations 2024): seller PIN, control-unit invoice
+  number + SCU identifier, date-time, item code/description/quantity/unit price, gross,
+  tax rate and amount, unique system identifier, **QR code**; **buyer PIN** optional in
+  law but mandatory in practice for the buyer's deductibility/input-VAT claim.
+- **Offline rules (VERIFIED, one nuance):** queued invoices must transmit once
+  connectivity resumes — the operational window is **24 hours** (receipts unsubmitted
+  beyond 24h are flagged; the 24h figure is from technical guidance, not the
+  Regulations' text). Separately, on **system failure/downtime** the taxpayer must
+  **notify the Commissioner in writing within 24 hours** and capture alternative-means
+  sales into eTIMS on restoration — our fiscal service should automate both the
+  detection and the notification workflow. [official: LN 64/2024; advisory: RSM, EY, EDICOM]
+
+### 1.3 Penalties — VERIFIED (changed twice; current regime below)
+- History: TPA s.86 penalty of **2× the tax due** (Finance Act 2023); Finance Act 2025
+  raised it to the **higher of 2× tax due or KES 2M** (from 1 Jul 2025).
+- **Current (Finance Act 2026, effective 1 Jul 2026):** s.86 replaced — failure to use
+  electronic tax systems now draws **5% of the tax due, minimum KES 100,000 (company) /
+  KES 10,000 (individual)**, imposable only after written notice and consideration of
+  the taxpayer's reasons (e.g., system issues beyond their control — a procedural
+  safeguard that our downtime-notification automation directly supports).
+  [advisory: PwC FA2026 alert, CDH, Lexology]
+- The sharper commercial sanction is unchanged: **non-eTIMS expenses are non-deductible
+  and now fail return validation (§1.1)** — for the ERP this makes eTIMS availability a
+  P0 reliability concern; an outage stops the customer's sales legally, not just
+  operationally.
 
 ### 1.4 Product consequences
 1. eTIMS engine is **core, first-party, SLA-backed** — never an add-on (see 01 §2).
