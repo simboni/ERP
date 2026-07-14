@@ -106,7 +106,9 @@ export default function Dashboard() {
 
       <p>
         <Link href="/payments">Payments</Link> ·{" "}
-        <Link href="/payroll">Payroll</Link>
+        <Link href="/payroll">Payroll</Link> ·{" "}
+        <Link href="/purchases">Purchases</Link> ·{" "}
+        <Link href="/vat">VAT</Link>
       </p>
 
       {deadlines.length > 0 && (
