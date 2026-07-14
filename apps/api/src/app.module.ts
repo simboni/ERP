@@ -7,7 +7,9 @@ import { loadConfig } from "./config";
 import { DbService } from "./db/db.service";
 import { FiscalController } from "./fiscal/fiscal.controller";
 import { FISCAL_PROVIDER, FiscalService } from "./fiscal/fiscal.service";
+import { EtimsOscuProvider } from "./fiscal/oscu.provider";
 import { SandboxFiscalProvider } from "./fiscal/provider";
+import { DarajaPaymentProvider } from "./payments/daraja.provider";
 import { HealthController } from "./health.controller";
 import { InvoicesController } from "./invoicing/invoices.controller";
 import { InvoicesService } from "./invoicing/invoices.service";
@@ -51,10 +53,35 @@ import { TenantsController } from "./tenants/tenants.controller";
     InvoicesService,
     PaymentsService,
     PayrollService,
-    { provide: PAYMENT_PROVIDER, useClass: SandboxPaymentProvider },
-    // Swapped for the real KRA OSCU/VSCU adapter once integrator
-    // certification grants credentials (roadmap Phase 0).
-    { provide: FISCAL_PROVIDER, useClass: SandboxFiscalProvider },
+    // Provider selection is configuration: sandbox by default; the
+    // production adapters activate via env once Phase-0 credentials exist.
+    {
+      provide: PAYMENT_PROVIDER,
+      useFactory: () =>
+        process.env.PAYMENT_PROVIDER === "daraja"
+          ? new DarajaPaymentProvider({
+              baseUrl:
+                process.env.DARAJA_BASE_URL ?? "https://sandbox.safaricom.co.ke",
+              consumerKey: process.env.DARAJA_CONSUMER_KEY ?? "",
+              consumerSecret: process.env.DARAJA_CONSUMER_SECRET ?? "",
+              shortcode: process.env.DARAJA_SHORTCODE ?? "",
+              passkey: process.env.DARAJA_PASSKEY ?? "",
+              callbackUrl: process.env.DARAJA_STK_CALLBACK_URL ?? "",
+            })
+          : new SandboxPaymentProvider(),
+    },
+    {
+      provide: FISCAL_PROVIDER,
+      useFactory: () =>
+        process.env.FISCAL_PROVIDER === "oscu"
+          ? new EtimsOscuProvider({
+              baseUrl: process.env.OSCU_BASE_URL ?? "",
+              tin: process.env.OSCU_TIN ?? "",
+              bhfId: process.env.OSCU_BHF_ID ?? "00",
+              cmcKey: process.env.OSCU_CMC_KEY ?? "",
+            })
+          : new SandboxFiscalProvider(),
+    },
   ],
 })
 export class AppModule {}
