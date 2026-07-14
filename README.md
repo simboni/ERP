@@ -32,9 +32,29 @@ onboarding replacing consultant-led implementation.
 
 ## Status
 
-**Foundation Piece 1 shipped:** monorepo + PostgreSQL RLS tenancy core + auth/RBAC +
-append-only audit trail, with a CI-enforced cross-tenant leak test gate.
-See `docs/roadmap/06-roadmap.md` for the full build plan.
+**Wedge backend complete (Pieces 1-4, 57 tests):**
+
+1. **Tenancy & security core** — PostgreSQL RLS multi-tenancy (fail-closed policies,
+   NOBYPASSRLS runtime role), Argon2id auth, two-stage tenant tokens, RBAC,
+   hash-chained append-only audit log, CI cross-tenant leak gate.
+2. **Compliance engines** — effective-dated statutory rules store seeded with
+   verified July 2026 figures; statutory payroll calculator (integer-cents math);
+   durable eTIMS signing queue (two-phase, per-branch sequencing, backoff,
+   dead-letter) behind a country-pluggable FiscalProvider with a confined worker role.
+3. **Ledger & invoicing** — append-only double-entry journal with DB-enforced
+   balance (deferred constraint trigger), Kenyan SME chart of accounts, atomic
+   invoice issue: totals + numbering + AR/Sales/VAT posting + eTIMS enqueue in
+   one transaction.
+4. **M-Pesa payments** — STK push + C2B webhook handling (exactly-once inbox),
+   auto-reconciliation to open invoices with DR M-Pesa / CR AR posting and
+   exception queue for manual matching.
+
+The full loop is verified live: signup → onboard → issue invoice → eTIMS signed
+(control number + QR) → M-Pesa paybill webhook → invoice paid → trial balance
+nets to zero → every step in the audit trail.
+
+Next: web PWA (login → dashboard → invoicing UI), invoice PDF/WhatsApp delivery,
+Daraja/OSCU production adapters. See `docs/roadmap/06-roadmap.md`.
 
 ## Development
 
