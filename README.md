@@ -32,4 +32,45 @@ onboarding replacing consultant-led implementation.
 
 ## Status
 
-Research & architecture phase — see `docs/roadmap/06-roadmap.md` for the build plan.
+**Foundation Piece 1 shipped:** monorepo + PostgreSQL RLS tenancy core + auth/RBAC +
+append-only audit trail, with a CI-enforced cross-tenant leak test gate.
+See `docs/roadmap/06-roadmap.md` for the full build plan.
+
+## Development
+
+Prerequisites: Node 22+, pnpm 10+, PostgreSQL 16+.
+
+```bash
+# 1. One-time: create roles + databases (as a Postgres superuser)
+sudo -u postgres psql -v ON_ERROR_STOP=1 -f db/bootstrap.sql
+
+# 2. Install and migrate
+pnpm install
+pnpm db:migrate        # jenga_dev
+pnpm db:migrate:test   # jenga_test (used by the test suites)
+
+# 3. Run the API (http://localhost:3000)
+pnpm --filter @jenga/api dev
+
+# 4. Tests — includes the RLS cross-tenant leak gate
+pnpm build && pnpm test
+```
+
+### Code layout
+
+| Path | Contents |
+|---|---|
+| `db/` | bootstrap roles, SQL migrations (RLS policies live here), migration runner |
+| `apps/api` | NestJS API: auth, tenancy runtime (`DbService.withTenant`), RBAC guards, audit |
+| `packages/shared` | Types shared with future web/POS clients (roles, token claims) |
+
+### Security invariants (enforced by tests, never regress)
+
+1. The runtime DB role has `NOBYPASSRLS` and owns no tables; every tenant table has
+   `FORCE ROW LEVEL SECURITY`.
+2. Tenant context is set only via transaction-local `set_config(..., true)` inside
+   `DbService.withTenant()` — no other write path to `app.current_tenant`.
+3. No tenant context ⇒ every policy denies (fail closed).
+4. `audit_log` is append-only: no UPDATE/DELETE grants, plus a blocking trigger.
+5. Tenant provisioning goes only through `create_tenant_with_owner()`
+   (SECURITY DEFINER); the app role cannot INSERT into `tenants`.

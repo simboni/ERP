@@ -1,0 +1,23 @@
+{
+  "name": "jenga-erp",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm -r run build",
+    "lint": "pnpm -r run lint",
+    "test": "pnpm -r run test",
+    "db:bootstrap": "psql -v ON_ERROR_STOP=1 -f db/bootstrap.sql",
+    "db:migrate": "tsx db/migrate.ts",
+    "db:migrate:test": "cross-env ADMIN_DB_URL=postgres://jenga_migrator:migrator_dev_pw@localhost:5432/jenga_test tsx db/migrate.ts"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "pg": "^8.16.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0"
+  }
+}
