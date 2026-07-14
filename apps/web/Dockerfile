@@ -8,7 +8,9 @@ COPY packages/shared/package.json packages/shared/
 RUN pnpm install --frozen-lockfile --filter @jenga/web...
 COPY apps/web apps/web
 ARG NEXT_PUBLIC_API_URL
+ARG API_HOST
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+    API_HOST=$API_HOST \
     NEXT_OUTPUT=standalone \
     NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter @jenga/web build

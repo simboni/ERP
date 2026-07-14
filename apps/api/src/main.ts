@@ -6,9 +6,14 @@ import { loadConfig } from "./config";
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
-  app.enableCors({
-    origin: (process.env.WEB_ORIGINS ?? "http://localhost:3001").split(","),
-  });
+  // WEB_ORIGINS explicit, or WEB_ORIGIN_HOST auto-injected by the platform
+  // blueprint (hostname only), else local dev.
+  const origins = process.env.WEB_ORIGINS
+    ? process.env.WEB_ORIGINS.split(",")
+    : process.env.WEB_ORIGIN_HOST
+      ? [`https://${process.env.WEB_ORIGIN_HOST}`]
+      : ["http://localhost:3001"];
+  app.enableCors({ origin: origins });
   // Security headers (05-security.md §3) — API responses only.
   app.use(
     (

@@ -1,8 +1,7 @@
-# Render Blueprint: one-click pilot deployment (docs/deploy-render.md).
-# Creates managed Postgres + the API (with fiscal/notification workers on)
-# + the web app. One manual step after first deploy: run
-# db/bootstrap-managed.sql from the database's psql shell, then fill the
-# three DB URL env vars (Render cannot template per-role URLs).
+# Render Blueprint — ZERO-TOUCH deploy (docs/deploy-render.md).
+# The API's pre-deploy step provisions its own runtime DB roles (passwords
+# auto-generated below) and runs migrations; connection URLs and CORS/API
+# hosts are derived automatically. Click "Apply" and wait for green.
 
 databases:
   - name: jenga-db
@@ -17,7 +16,7 @@ services:
     dockerContext: .
     plan: starter
     healthCheckPath: /health
-    preDeployCommand: node db-dist/migrate.js
+    preDeployCommand: node db-dist/bootstrap-and-migrate.js
     envVars:
       - key: NODE_ENV
         value: production
@@ -25,20 +24,23 @@ services:
         generateValue: true
       - key: DATA_ENCRYPTION_KEY
         generateValue: true
+      - key: APP_DB_PASSWORD
+        generateValue: true
+      - key: WORKER_DB_PASSWORD
+        generateValue: true
+      - key: ADMIN_DB_URL
+        fromDatabase:
+          name: jenga-db
+          property: connectionString
+      - key: WEB_ORIGIN_HOST
+        fromService:
+          type: web
+          name: jenga-web
+          property: host
       - key: FISCAL_WORKER_ENABLED
         value: "true"
       - key: NOTIFY_WORKER_ENABLED
         value: "true"
-      # Set after running db/bootstrap-managed.sql (see deploy-render.md):
-      - key: ADMIN_DB_URL
-        sync: false
-      - key: APP_DB_URL
-        sync: false
-      - key: WORKER_DB_URL
-        sync: false
-      # Set to the web service's public URL once known:
-      - key: WEB_ORIGINS
-        sync: false
 
   - type: web
     name: jenga-web
@@ -49,6 +51,8 @@ services:
     envVars:
       - key: NEXT_OUTPUT
         value: standalone
-      # Set to the API service's public URL (build-time; triggers rebuild):
-      - key: NEXT_PUBLIC_API_URL
-        sync: false
+      - key: API_HOST
+        fromService:
+          type: web
+          name: jenga-api
+          property: host

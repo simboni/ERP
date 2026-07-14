@@ -10,8 +10,9 @@ COPY packages/shared packages/shared
 COPY apps/api apps/api
 COPY db db
 RUN pnpm --filter @jenga/shared build && pnpm --filter @jenga/api build
-# Compile the migration runner to plain CommonJS for the runtime image.
-RUN cd apps/api && ./node_modules/.bin/tsc ../../db/migrate.ts \
+# Compile the migration + managed-bootstrap runners for the runtime image.
+RUN cd apps/api && ./node_modules/.bin/tsc \
+      ../../db/migrate.ts ../../db/bootstrap-and-migrate.ts \
       --outDir /repo/db-dist --module commonjs --target es2022 \
       --esModuleInterop --skipLibCheck
 # Prune to production dependencies only.

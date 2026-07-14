@@ -14,8 +14,8 @@ const ADMIN_DB_URL =
   process.env.ADMIN_DB_URL ??
   "postgres://jenga_migrator:migrator_dev_pw@localhost:5432/jenga_dev";
 
-async function main(): Promise<void> {
-  const client = new Client({ connectionString: ADMIN_DB_URL });
+export async function runMigrations(adminUrl: string): Promise<void> {
+  const client = new Client({ connectionString: adminUrl });
   await client.connect();
   try {
     await client.query(
@@ -60,7 +60,9 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (require.main === module) {
+  runMigrations(ADMIN_DB_URL).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

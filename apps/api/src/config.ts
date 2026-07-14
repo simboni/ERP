@@ -17,13 +17,25 @@ export function loadConfig(): AppConfig {
   if (isProd && jwtSecret.length < 32) {
     throw new Error("JWT_SECRET must be set (>=32 chars) in production");
   }
+  // Managed-platform mode (Render): derive the runtime-role URLs from the
+  // owner URL + generated passwords, so the blueprint needs zero manual URLs.
+  const derive = (role: string, pw: string | undefined): string | null => {
+    const admin = process.env.ADMIN_DB_URL;
+    if (!admin || !pw) return null;
+    const u = new URL(admin);
+    u.username = role;
+    u.password = pw;
+    return u.toString();
+  };
   return {
     port: Number(process.env.PORT ?? 3000),
     appDbUrl:
       process.env.APP_DB_URL ??
+      derive("jenga_app", process.env.APP_DB_PASSWORD) ??
       "postgres://jenga_app:app_dev_pw@localhost:5432/jenga_dev",
     workerDbUrl:
       process.env.WORKER_DB_URL ??
+      derive("jenga_worker", process.env.WORKER_DB_PASSWORD) ??
       "postgres://jenga_worker:worker_dev_pw@localhost:5432/jenga_dev",
     jwtSecret: jwtSecret || "dev-only-secret-do-not-use-in-production",
     accessTokenTtlSec: Number(process.env.ACCESS_TOKEN_TTL_SEC ?? 900),
