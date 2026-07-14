@@ -8,6 +8,7 @@ import { DbService } from "../src/db/db.service";
 import { AuditService } from "../src/audit/audit.service";
 import { LedgerService, seedDefaultAccounts } from "../src/ledger/ledger.service";
 import { BillsService } from "../src/purchases/bills.service";
+import { SandboxPayoutProvider } from "../src/payments/payout.provider";
 import { ComplianceService } from "../src/compliance/compliance.service";
 
 process.env.APP_DB_URL =
@@ -18,7 +19,7 @@ describe("purchases + input VAT", () => {
   const db = new DbService();
   const ledger = new LedgerService();
   const audit = new AuditService();
-  const bills = new BillsService(ledger, audit);
+  const bills = new BillsService(ledger, audit, new SandboxPayoutProvider(), db);
   const compliance = new ComplianceService();
 
   let tenant: string;
@@ -122,6 +123,61 @@ describe("purchases + input VAT", () => {
     expect(draft.billsMissingEtims).toBe(1);
     expect(draft.outputVatCents).toBe(0); // no sales for this tenant
     expect(draft.netVatCents).toBe(-488_000);
+  });
+
+  test("bill settlement: M-Pesa B2C payout clears AP and marks paid", async () => {
+    const draft = await db.withTenant(tenant, user, (c) =>
+      bills.createDraft(c, {
+        tenantId: tenant,
+        userId: user,
+        supplierId: supplier,
+        billDate: "2026-06-20",
+        supplierInvoiceNo: "BD-800",
+        etimsControlNumber: "KRAMW008888888",
+        lines: [
+          { description: "Restock", quantity: 1, unitPriceCents: 500_000, vatRate: "0" },
+        ],
+      }),
+    );
+    // Cannot pay a draft.
+    await expect(
+      bills.pay({ tenantId: tenant, userId: user, billId: draft.id, method: "cash" }),
+    ).rejects.toThrow(/Only approved/);
+
+    await db.withTenant(tenant, user, (c) =>
+      bills.approve(c, { tenantId: tenant, userId: user, billId: draft.id }),
+    );
+    const paid = await bills.pay({
+      tenantId: tenant,
+      userId: user,
+      billId: draft.id,
+      method: "mpesa_b2c",
+      msisdn: "254722334455",
+    });
+    expect(paid.providerRef).toMatch(/^AG_SBX_/);
+
+    const state = await db.withTenant(tenant, user, async (c) => {
+      const b = await c.query("SELECT status FROM bills WHERE id = $1", [draft.id]);
+      const lines = await c.query(
+        `SELECT a.code, jl.debit_cents, jl.credit_cents
+         FROM journal_lines jl JOIN accounts a ON a.id = jl.account_id
+         WHERE jl.entry_id = $1 ORDER BY a.code`,
+        [paid.journalEntryId],
+      );
+      return { status: b.rows[0].status, lines: lines.rows };
+    });
+    expect(state.status).toBe("paid");
+    expect(
+      state.lines.map((l) => ({ code: l.code, d: Number(l.debit_cents), c: Number(l.credit_cents) })),
+    ).toEqual([
+      { code: "1010", d: 0, c: 500_000 },
+      { code: "2100", d: 500_000, c: 0 },
+    ]);
+
+    // Cannot pay twice.
+    await expect(
+      bills.pay({ tenantId: tenant, userId: user, billId: draft.id, method: "cash" }),
+    ).rejects.toThrow(/Only approved/);
   });
 
   test("books still net to zero and bills are RLS-isolated", async () => {

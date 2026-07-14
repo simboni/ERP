@@ -1,13 +1,23 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
 import type { PoolClient } from "pg";
 import { AuditService } from "../audit/audit.service";
+import { DbService } from "../db/db.service";
 import { InvoiceLineInput } from "../invoicing/invoices.service";
 import { LedgerService } from "../ledger/ledger.service";
 import { mulRate } from "../payroll/calculator";
+import { PAYOUT_PROVIDER, PayoutProvider } from "../payments/payout.provider";
+
+export type SettlementMethod = "cash" | "bank" | "mpesa_b2c";
+const SETTLEMENT_ACCOUNT: Record<SettlementMethod, string> = {
+  cash: "1000",
+  bank: "1020",
+  mpesa_b2c: "1010",
+};
 
 export interface BillLineInput extends InvoiceLineInput {
   accountCode?: string; // expense/COGS account, default 6000
@@ -25,7 +35,117 @@ export class BillsService {
   constructor(
     private readonly ledger: LedgerService,
     private readonly audit: AuditService,
+    @Inject(PAYOUT_PROVIDER) private readonly payout: PayoutProvider,
+    private readonly db: DbService,
   ) {}
+
+  /**
+   * Settle an approved bill: DR Accounts Payable / CR cash|bank|M-Pesa.
+   * For mpesa_b2c the provider call happens OUTSIDE any transaction
+   * (two-phase, like every external call); the settlement posts only after
+   * the payout is accepted, carrying the provider reference in the audit.
+   */
+  async pay(args: {
+    tenantId: string;
+    userId: string;
+    billId: string;
+    method: SettlementMethod;
+    msisdn?: string;
+  }): Promise<{ journalEntryId: string; providerRef: string | null }> {
+    // Phase 1: validate state and capture the amount.
+    const bill = await this.db.withTenant(
+      args.tenantId,
+      args.userId,
+      async (client) => {
+        const r = await client.query(
+          `SELECT b.id, b.status, b.total_cents, b.supplier_invoice_no,
+                  s.name AS supplier_name
+           FROM bills b JOIN suppliers s ON s.id = b.supplier_id
+           WHERE b.id = $1`,
+          [args.billId],
+        );
+        return r.rows[0] as
+          | {
+              id: string;
+              status: string;
+              total_cents: string;
+              supplier_invoice_no: string | null;
+              supplier_name: string;
+            }
+          | undefined;
+      },
+    );
+    if (!bill) throw new NotFoundException("Bill not found");
+    if (bill.status !== "approved") {
+      throw new BadRequestException(
+        `Only approved bills can be paid (status: ${bill.status})`,
+      );
+    }
+
+    // Phase 2: external payout for the M-Pesa rail.
+    let providerRef: string | null = null;
+    if (args.method === "mpesa_b2c") {
+      if (!args.msisdn || !/^2547\d{8}$/.test(args.msisdn)) {
+        throw new BadRequestException("msisdn (2547XXXXXXXX) required for M-Pesa payout");
+      }
+      const res = await this.payout.sendB2C({
+        tenantId: args.tenantId,
+        amountCents: Number(bill.total_cents),
+        msisdn: args.msisdn,
+        remarks: `Bill ${bill.supplier_invoice_no ?? bill.id}`,
+      });
+      providerRef = res.providerRef;
+    }
+
+    // Phase 3: post the settlement and flip status, atomically + idempotently.
+    const journalEntryId = await this.db.withTenant(
+      args.tenantId,
+      args.userId,
+      async (client) => {
+        const locked = await client.query(
+          "SELECT status FROM bills WHERE id = $1 FOR UPDATE",
+          [args.billId],
+        );
+        if (locked.rows[0].status !== "approved") {
+          throw new BadRequestException("Bill was settled concurrently");
+        }
+        const posting = await this.ledger.post(client, {
+          tenantId: args.tenantId,
+          postedBy: args.userId,
+          entryDate: new Date().toISOString().slice(0, 10),
+          memo: `Payment of bill ${bill.supplier_invoice_no ?? args.billId} to ${bill.supplier_name}`,
+          sourceType: "bill_payment",
+          sourceId: args.billId,
+          idempotencyKey: `bill-payment:${args.billId}`,
+          lines: [
+            { accountCode: "2100", debitCents: Number(bill.total_cents) },
+            {
+              accountCode: SETTLEMENT_ACCOUNT[args.method],
+              creditCents: Number(bill.total_cents),
+            },
+          ],
+        });
+        await client.query(
+          "UPDATE bills SET status = 'paid' WHERE id = $1",
+          [args.billId],
+        );
+        await this.audit.record(client, {
+          tenantId: args.tenantId,
+          actorUserId: args.userId,
+          action: "bill.paid",
+          entityType: "bill",
+          entityId: args.billId,
+          payload: {
+            method: args.method,
+            amountCents: Number(bill.total_cents),
+            providerRef,
+          },
+        });
+        return posting.entryId;
+      },
+    );
+    return { journalEntryId, providerRef };
+  }
 
   async createDraft(
     client: PoolClient,

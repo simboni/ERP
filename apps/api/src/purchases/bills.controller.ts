@@ -17,7 +17,7 @@ import {
   TenantContextGuard,
 } from "../auth/guards";
 import { DbService } from "../db/db.service";
-import { BillLineInput, BillsService } from "./bills.service";
+import { BillLineInput, BillsService, SettlementMethod } from "./bills.service";
 
 const PURCHASE_ROLES = ["owner", "admin", "accountant", "storekeeper"] as const;
 
@@ -108,6 +108,26 @@ export class BillsController {
         billId,
       }),
     );
+  }
+
+  /** Money leaves the business here: owner/admin only (maker-checker). */
+  @Post("bills/:id/pay")
+  @Roles("owner", "admin")
+  async pay(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) billId: string,
+    @Body() body: { method?: SettlementMethod; msisdn?: string },
+  ) {
+    if (!body?.method || !["cash", "bank", "mpesa_b2c"].includes(body.method)) {
+      throw new BadRequestException("method must be cash | bank | mpesa_b2c");
+    }
+    return this.bills.pay({
+      tenantId: claims.tid,
+      userId: claims.sub,
+      billId,
+      method: body.method,
+      msisdn: body.msisdn,
+    });
   }
 
   @Get("bills")

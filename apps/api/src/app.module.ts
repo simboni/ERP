@@ -21,6 +21,10 @@ import {
   PaymentsController,
 } from "./payments/payments.controller";
 import { PAYMENT_PROVIDER, PaymentsService } from "./payments/payments.service";
+import {
+  PAYOUT_PROVIDER,
+  SandboxPayoutProvider,
+} from "./payments/payout.provider";
 import { SandboxPaymentProvider } from "./payments/provider";
 import { PayrollController } from "./payroll/payroll.controller";
 import { PayrollService } from "./payroll/payroll.service";
@@ -61,6 +65,7 @@ import { TenantsController } from "./tenants/tenants.controller";
     PayrollService,
     ComplianceService,
     BillsService,
+    { provide: PAYOUT_PROVIDER, useClass: SandboxPayoutProvider },
     // Provider selection is configuration: sandbox by default; the
     // production adapters activate via env once Phase-0 credentials exist.
     {
