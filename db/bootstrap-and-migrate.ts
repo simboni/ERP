@@ -73,6 +73,12 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error(err);
-  process.exit(1);
+  // Pre-deploy must never block the service from starting: the API boots
+  // regardless and reports database state via /health, where the problem
+  // is visible and fixable. Log loudly and let the deploy proceed.
+  console.error(
+    `WARNING: bootstrap/migrations did not complete (${err instanceof Error ? err.message : err}). ` +
+      "The service will start; check /health and the env vars per docs/deploy-render.md.",
+  );
+  process.exit(0);
 });

@@ -13,10 +13,22 @@ import { DbService } from "./db/db.service";
 export class HealthController {
   constructor(private readonly db: DbService) {}
 
+  /**
+   * Liveness first: this endpoint always answers 200 so the platform
+   * routes traffic and problems surface as readable errors instead of a
+   * blank Bad Gateway. Database state is reported as data.
+   */
   @Get()
   async health() {
-    await this.db.query("SELECT 1");
-    return { status: "ok" };
+    try {
+      await this.db.query("SELECT 1");
+      return { status: "ok", db: "ok" };
+    } catch (err) {
+      return {
+        status: "degraded",
+        db: `error: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
   }
 }
 

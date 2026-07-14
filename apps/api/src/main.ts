@@ -24,10 +24,10 @@ async function preflightDb(): Promise<void> {
     await probe.end();
   } catch (err) {
     await probe.end().catch(() => undefined);
+    const reason = err instanceof Error ? err.message : String(err);
     if (process.env.ADMIN_DB_URL) {
       console.error(
-        "WARNING: runtime DB role connection failed " +
-          `(${err instanceof Error ? err.message : err}); ` +
+        `WARNING: runtime DB role connection failed (${reason}); ` +
           "falling back to the owner connection. Tenant isolation remains " +
           "enforced by FORCE ROW LEVEL SECURITY, but provision jenga_app/" +
           "jenga_worker (docs/deploy-render.md) to restore full separation.",
@@ -35,7 +35,12 @@ async function preflightDb(): Promise<void> {
       process.env.APP_DB_URL = process.env.ADMIN_DB_URL;
       process.env.WORKER_DB_URL = process.env.ADMIN_DB_URL;
     } else {
-      throw err;
+      // NEVER die at boot: serve, and report the DB problem via /health
+      // and request errors where it is visible and diagnosable.
+      console.error(
+        `WARNING: database unreachable at boot (${reason}). Serving anyway; ` +
+          "requests will fail until connectivity is restored.",
+      );
     }
   }
 }
