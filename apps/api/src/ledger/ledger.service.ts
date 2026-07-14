@@ -170,10 +170,12 @@ export const DEFAULT_ACCOUNTS: {
   { code: "2100", name: "Accounts Payable", type: "liability", system: true },
   { code: "2200", name: "VAT Payable", type: "liability", system: true },
   { code: "2300", name: "Statutory Payables", type: "liability", system: true },
+  { code: "2310", name: "Wages Payable", type: "liability", system: true },
   { code: "3000", name: "Owner's Equity", type: "equity" },
   { code: "4000", name: "Sales Revenue", type: "income", system: true },
   { code: "5000", name: "Cost of Goods Sold", type: "expense" },
   { code: "6000", name: "Operating Expenses", type: "expense" },
+  { code: "6100", name: "Salaries & Wages", type: "expense", system: true },
 ];
 
 export async function seedDefaultAccounts(
