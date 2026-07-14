@@ -23,7 +23,18 @@ export async function getApiBase(): Promise<string> {
       return resolvedBase;
     }
   } catch {
-    // fall through to local default
+    // fall through
+  }
+  // Blueprint convention: both services share one blueprint with fixed
+  // names, so the API is this page's own host with the service name
+  // swapped (jenga-web.onrender.com -> jenga-api.onrender.com). Works
+  // even when platform env injection fails entirely.
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host.includes("jenga-web")) {
+      resolvedBase = `https://${host.replace("jenga-web", "jenga-api")}`;
+      return resolvedBase;
+    }
   }
   resolvedBase = "http://localhost:3000";
   return resolvedBase;
