@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { api, fmtKes, getTenantToken } from "@/lib/api";
+import { api, API_BASE, fmtKes, getTenantToken } from "@/lib/api";
 
 interface Employee {
   id: string;
@@ -206,7 +206,7 @@ export default function PayrollPage() {
               <thead>
                 <tr>
                   <th>Employee</th><th>Gross</th><th>PAYE</th><th>NSSF</th>
-                  <th>SHIF</th><th>Housing</th><th>Net</th>
+                  <th>SHIF</th><th>Housing</th><th>Net</th><th></th>
                 </tr>
               </thead>
               <tbody>
@@ -219,6 +219,16 @@ export default function PayrollPage() {
                     <td>{fmtKes(i.shif_cents)}</td>
                     <td>{fmtKes(i.ahl_emp_cents)}</td>
                     <td><strong>{fmtKes(i.net_cents)}</strong></td>
+                    <td>
+                      {detail.status === "committed" && (
+                        <a href="#" onClick={(e) => { e.preventDefault();
+                          void fetch(`${API_BASE}/tenants/current/payroll/runs/${detail.id}/items/${i.id}/payslip.pdf`,
+                            { headers: { Authorization: `Bearer ${getTenantToken()}` } })
+                            .then((r) => r.blob())
+                            .then((b) => window.open(URL.createObjectURL(b), "_blank"));
+                        }}>payslip</a>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -227,6 +237,21 @@ export default function PayrollPage() {
               Employer additionally pays: NSSF {fmtKes(detail.nssf_er_cents)} ·
               Housing {fmtKes(detail.ahl_er_cents)} · NITA {fmtKes(detail.nita_cents)}
             </p>
+            {detail.status === "committed" && (
+              <button className="secondary" onClick={() => {
+                void fetch(`${API_BASE}/tenants/current/payroll/runs/${detail.id}/p10.csv`,
+                  { headers: { Authorization: `Bearer ${getTenantToken()}` } })
+                  .then((r) => r.blob())
+                  .then((b) => {
+                    const a = document.createElement("a");
+                    a.href = URL.createObjectURL(b);
+                    a.download = `p10-${detail.period}.csv`;
+                    a.click();
+                  });
+              }}>
+                Download P10 (iTax CSV)
+              </button>
+            )}
             {detail.status === "draft" && (
               <button disabled={busy} onClick={() => void commitRun(detail.id)()}>
                 Commit run (posts to ledger)

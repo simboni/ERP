@@ -110,7 +110,11 @@ export default function Dashboard() {
         <Link href="/payments">{t("payments")}</Link> ·{" "}
         <Link href="/payroll">{t("payroll")}</Link> ·{" "}
         <Link href="/purchases">{t("purchases")}</Link> ·{" "}
-        <Link href="/vat">{t("vat")}</Link> · <LangToggle />
+        <Link href="/vat">{t("vat")}</Link> ·{" "}
+        <Link href="/quotes">Quotes</Link> ·{" "}
+        <Link href="/inventory">Inventory</Link> ·{" "}
+        <Link href="/reports">Reports</Link> ·{" "}
+        <Link href="/settings">Settings</Link> · <LangToggle />
       </p>
 
       {deadlines.length > 0 && (
@@ -152,7 +156,7 @@ export default function Dashboard() {
             <tbody>
               {invoices.map((i) => (
                 <tr key={i.id}>
-                  <td>{i.invoice_no ?? "draft"}</td>
+                  <td><Link href={`/invoices/${i.id}`}>{i.invoice_no ?? "draft"}</Link></td>
                   <td>{i.customer_name}</td>
                   <td>{fmtKes(i.total_cents)}</td>
                   <td>
