@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { api, clearTokens, fmtKes, getTenantToken } from "@/lib/api";
+import { LangToggle, useI18n } from "@/lib/i18n";
 
 interface TrialRow {
   code: string;
@@ -33,6 +34,7 @@ interface Deadline {
 
 export default function Dashboard() {
   const router = useRouter();
+  const { t } = useI18n();
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [tb, setTb] = useState<TrialRow[]>([]);
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
@@ -83,7 +85,7 @@ export default function Dashboard() {
               router.replace("/");
             }}
           >
-            Sign out
+            {t("signOut")}
           </a>
         </span>
       </div>
@@ -91,34 +93,34 @@ export default function Dashboard() {
 
       <div className="row">
         <div className="card">
-          <span className="muted">Cash &amp; M-Pesa</span>
+          <span className="muted">{t("cash")}</span>
           <div className="stat">{fmtKes(cash)}</div>
         </div>
         <div className="card">
-          <span className="muted">Owed to you</span>
+          <span className="muted">{t("owed")}</span>
           <div className="stat">{fmtKes(receivable)}</div>
         </div>
         <div className="card">
-          <span className="muted">VAT owed to KRA</span>
+          <span className="muted">{t("vatDue")}</span>
           <div className="stat">{fmtKes(vatDue)}</div>
         </div>
       </div>
 
       <p>
-        <Link href="/payments">Payments</Link> ·{" "}
-        <Link href="/payroll">Payroll</Link> ·{" "}
-        <Link href="/purchases">Purchases</Link> ·{" "}
-        <Link href="/vat">VAT</Link>
+        <Link href="/payments">{t("payments")}</Link> ·{" "}
+        <Link href="/payroll">{t("payroll")}</Link> ·{" "}
+        <Link href="/purchases">{t("purchases")}</Link> ·{" "}
+        <Link href="/vat">{t("vat")}</Link> · <LangToggle />
       </p>
 
       {deadlines.length > 0 && (
         <div className="card">
-          <span className="muted">Statutory deadlines</span>
+          <span className="muted">{t("deadlines")}</span>
           {deadlines.slice(0, 3).map((d) => (
             <div key={d.key}>
               {d.label} — <strong>{d.dueDate}</strong>{" "}
               <span className={d.daysRemaining <= 5 ? "err" : "muted"}>
-                ({d.overdue ? "OVERDUE" : `${d.daysRemaining} days`})
+                ({d.overdue ? t("overdue") : `${d.daysRemaining} ${t("days")}`})
               </span>
             </div>
           ))}
@@ -126,25 +128,24 @@ export default function Dashboard() {
       )}
 
       <h2>
-        Invoices{" "}
+        {t("invoices")}{" "}
         <Link href="/invoices/new" style={{ fontSize: "0.9rem" }}>
-          + New invoice
+          {t("newInvoice")}
         </Link>
       </h2>
       <div className="card">
         {invoices.length === 0 ? (
           <p className="muted">
-            No invoices yet. Create your first eTIMS invoice — it takes a
-            minute.
+            {t("noInvoices")}
           </p>
         ) : (
           <table>
             <thead>
               <tr>
                 <th>No.</th>
-                <th>Customer</th>
-                <th>Total</th>
-                <th>Status</th>
+                <th>{t("customer")}</th>
+                <th>{t("total")}</th>
+                <th>{t("status")}</th>
                 <th>eTIMS</th>
               </tr>
             </thead>

@@ -8,6 +8,7 @@ import {
   setTenantToken,
   setUserToken,
 } from "@/lib/api";
+import { LangToggle, useI18n } from "@/lib/i18n";
 
 interface Membership {
   tenantId: string;
@@ -18,6 +19,7 @@ interface Membership {
 
 export default function AuthPage() {
   const router = useRouter();
+  const { t } = useI18n();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -75,13 +77,13 @@ export default function AuthPage() {
   if (memberships) {
     return (
       <>
-        <h1>Choose a workspace</h1>
+        <h1>{t("chooseWorkspace")}</h1>
         {memberships.map((m) => (
           <div className="card" key={m.tenantId}>
             <strong>{m.tenantName}</strong>{" "}
             <span className="muted">({m.role})</span>
             <br />
-            <button onClick={() => void selectTenant(m.tenantId)}>Open</button>
+            <button onClick={() => void selectTenant(m.tenantId)}>{t("open")}</button>
           </div>
         ))}
       </>
@@ -91,20 +93,21 @@ export default function AuthPage() {
   return (
     <>
       <h1>Jenga ERP</h1>
+      <p className="muted"><LangToggle /></p>
       <p className="muted">
-        eTIMS invoicing · M-Pesa reconciliation · compliant books
+        {t("tagline")}
       </p>
       <div className="card">
         <form onSubmit={(e) => void submit(e)}>
           {mode === "signup" && (
             <>
-              <label>Your name</label>
+              <label>{t("yourName")}</label>
               <input
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 required
               />
-              <label>Business name</label>
+              <label>{t("businessName")}</label>
               <input
                 value={tenantName}
                 onChange={(e) => setTenantName(e.target.value)}
@@ -112,14 +115,14 @@ export default function AuthPage() {
               />
             </>
           )}
-          <label>Email</label>
+          <label>{t("email")}</label>
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
           />
-          <label>Password</label>
+          <label>{t("password")}</label>
           <input
             type="password"
             value={password}
@@ -129,14 +132,14 @@ export default function AuthPage() {
           />
           {error && <div className="err">{error}</div>}
           <button disabled={busy} type="submit">
-            {mode === "login" ? "Sign in" : "Create workspace"}
+            {mode === "login" ? t("signIn") : t("createWorkspace")}
           </button>{" "}
           <button
             type="button"
             className="secondary"
             onClick={() => setMode(mode === "login" ? "signup" : "login")}
           >
-            {mode === "login" ? "New business? Sign up" : "Have an account? Sign in"}
+            {mode === "login" ? t("newHere") : t("haveAccount")}
           </button>
         </form>
       </div>

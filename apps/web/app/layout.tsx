@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { LangProvider } from "@/lib/i18n";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -19,7 +20,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <main>{children}</main>
+        <LangProvider>
+          <main>{children}</main>
+        </LangProvider>
       </body>
     </html>
   );
