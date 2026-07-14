@@ -7,6 +7,28 @@
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
+let resolvedBase: string | null = process.env.NEXT_PUBLIC_API_URL ?? null;
+
+/**
+ * Resolve the API base: build-time value if baked in, else the server's
+ * runtime config (survives deploy-order races on Render), else local dev.
+ */
+export async function getApiBase(): Promise<string> {
+  if (resolvedBase) return resolvedBase;
+  try {
+    const res = await fetch("/api/config");
+    const cfg = (await res.json()) as { apiUrl: string | null };
+    if (cfg.apiUrl) {
+      resolvedBase = cfg.apiUrl;
+      return resolvedBase;
+    }
+  } catch {
+    // fall through to local default
+  }
+  resolvedBase = "http://localhost:3000";
+  return resolvedBase;
+}
+
 export function getUserToken(): string | null {
   return sessionStorage.getItem("jenga.userToken");
 }
@@ -38,14 +60,23 @@ export async function api<T>(
   opts: { method?: string; body?: unknown; token?: string | null } = {},
 ): Promise<T> {
   const token = opts.token ?? getTenantToken() ?? getUserToken();
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: opts.method ?? "GET",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
-  });
+  const base = await getApiBase();
+  let res: Response;
+  try {
+    res = await fetch(`${base}${path}`, {
+      method: opts.method ?? "GET",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+    });
+  } catch {
+    throw new ApiError(
+      0,
+      "Cannot reach the server. If this was just deployed, the API may still be starting — try again in a minute.",
+    );
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = Array.isArray(data?.message)

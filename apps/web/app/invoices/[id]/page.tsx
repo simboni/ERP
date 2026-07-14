@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { api, API_BASE, fmtKes, getTenantToken } from "@/lib/api";
+import { api, getApiBase, fmtKes, getTenantToken } from "@/lib/api";
 
 interface InvoiceDetail {
   id: string;
@@ -64,7 +64,7 @@ export default function InvoicePage() {
   };
 
   const openPdf = async (): Promise<void> => {
-    const res = await fetch(`${API_BASE}/tenants/current/invoices/${id}/pdf`, {
+    const res = await fetch(`${await getApiBase()}/tenants/current/invoices/${id}/pdf`, {
       headers: { Authorization: `Bearer ${getTenantToken()}` },
     });
     const blob = await res.blob();

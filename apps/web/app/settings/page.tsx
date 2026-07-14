@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { api, API_BASE, getTenantToken, getUserToken } from "@/lib/api";
+import { api, getApiBase, getTenantToken, getUserToken } from "@/lib/api";
 
 interface Member {
   id: string;
@@ -88,7 +88,7 @@ export default function SettingsPage() {
   });
 
   const exportData = async (): Promise<void> => {
-    const res = await fetch(`${API_BASE}/tenants/current/export`, {
+    const res = await fetch(`${await getApiBase()}/tenants/current/export`, {
       headers: { Authorization: `Bearer ${getTenantToken()}` },
     });
     const blob = await res.blob();

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { api, API_BASE, fmtKes, getTenantToken } from "@/lib/api";
+import { api, getApiBase, fmtKes, getTenantToken } from "@/lib/api";
 
 interface Employee {
   id: string;
@@ -222,10 +222,12 @@ export default function PayrollPage() {
                     <td>
                       {detail.status === "committed" && (
                         <a href="#" onClick={(e) => { e.preventDefault();
-                          void fetch(`${API_BASE}/tenants/current/payroll/runs/${detail.id}/items/${i.id}/payslip.pdf`,
-                            { headers: { Authorization: `Bearer ${getTenantToken()}` } })
-                            .then((r) => r.blob())
-                            .then((b) => window.open(URL.createObjectURL(b), "_blank"));
+                          void (async () => {
+                            const base = await getApiBase();
+                            const r = await fetch(`${base}/tenants/current/payroll/runs/${detail.id}/items/${i.id}/payslip.pdf`,
+                              { headers: { Authorization: `Bearer ${getTenantToken()}` } });
+                            window.open(URL.createObjectURL(await r.blob()), "_blank");
+                          })();
                         }}>payslip</a>
                       )}
                     </td>
@@ -239,15 +241,15 @@ export default function PayrollPage() {
             </p>
             {detail.status === "committed" && (
               <button className="secondary" onClick={() => {
-                void fetch(`${API_BASE}/tenants/current/payroll/runs/${detail.id}/p10.csv`,
-                  { headers: { Authorization: `Bearer ${getTenantToken()}` } })
-                  .then((r) => r.blob())
-                  .then((b) => {
-                    const a = document.createElement("a");
-                    a.href = URL.createObjectURL(b);
-                    a.download = `p10-${detail.period}.csv`;
-                    a.click();
-                  });
+                void (async () => {
+                  const base = await getApiBase();
+                  const r = await fetch(`${base}/tenants/current/payroll/runs/${detail.id}/p10.csv`,
+                    { headers: { Authorization: `Bearer ${getTenantToken()}` } });
+                  const a = document.createElement("a");
+                  a.href = URL.createObjectURL(await r.blob());
+                  a.download = `p10-${detail.period}.csv`;
+                  a.click();
+                })();
               }}>
                 Download P10 (iTax CSV)
               </button>
