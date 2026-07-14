@@ -167,6 +167,7 @@ export const DEFAULT_ACCOUNTS: {
   { code: "1020", name: "Bank Account", type: "asset" },
   { code: "1100", name: "Accounts Receivable", type: "asset", system: true },
   { code: "1200", name: "Inventory", type: "asset" },
+  { code: "1300", name: "Input VAT Receivable", type: "asset", system: true },
   { code: "2100", name: "Accounts Payable", type: "liability", system: true },
   { code: "2200", name: "VAT Payable", type: "liability", system: true },
   { code: "2300", name: "Statutory Payables", type: "liability", system: true },

@@ -9,10 +9,13 @@ export interface VatReturnDraft {
   salesZeroRatedCents: number;
   salesExemptCents: number;
   outputVatCents: number;
-  /** Purchases module lands later; until then input VAT must be entered on iTax. */
-  inputVatCents: null;
+  inputVatCents: number;
+  /** Output minus input; positive = payable to KRA. */
+  netVatCents: number;
   invoicesTotal: number;
   invoicesFiscalized: number;
+  /** Approved bills without an eTIMS control number: expense not deductible (s.23A). */
+  billsMissingEtims: number;
   generatedAt: string;
 }
 
@@ -78,15 +81,30 @@ export class ComplianceService {
          AND to_char(i.issue_date, 'YYYY-MM') = $1`,
       [period],
     );
+    // Input VAT: only bills backed by an eTIMS control number qualify for
+    // the claim (s.23A + the Jan-2026 return-validation engine).
+    const purchases = await client.query(
+      `SELECT
+         coalesce(sum(vat_cents) FILTER (WHERE etims_control_number IS NOT NULL), 0)::bigint AS input_vat,
+         count(*) FILTER (WHERE etims_control_number IS NULL)::int AS missing_etims
+       FROM bills
+       WHERE status IN ('approved', 'paid')
+         AND to_char(bill_date, 'YYYY-MM') = $1`,
+      [period],
+    );
+    const outputVat = byRate.get("0.16")?.vat ?? 0;
+    const inputVat = Number(purchases.rows[0].input_vat);
     return {
       period,
       salesVatable16Cents: byRate.get("0.16")?.sales ?? 0,
       salesZeroRatedCents: byRate.get("0")?.sales ?? 0,
       salesExemptCents: byRate.get("exempt")?.sales ?? 0,
-      outputVatCents: byRate.get("0.16")?.vat ?? 0,
-      inputVatCents: null,
+      outputVatCents: outputVat,
+      inputVatCents: inputVat,
+      netVatCents: outputVat - inputVat,
       invoicesTotal: fiscal.rows[0].total,
       invoicesFiscalized: fiscal.rows[0].signed,
+      billsMissingEtims: purchases.rows[0].missing_etims,
       generatedAt: new Date().toISOString(),
     };
   }

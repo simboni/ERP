@@ -24,6 +24,8 @@ import { PAYMENT_PROVIDER, PaymentsService } from "./payments/payments.service";
 import { SandboxPaymentProvider } from "./payments/provider";
 import { PayrollController } from "./payroll/payroll.controller";
 import { PayrollService } from "./payroll/payroll.service";
+import { BillsController } from "./purchases/bills.controller";
+import { BillsService } from "./purchases/bills.service";
 import { RulesService } from "./rules/rules.service";
 import { TenantsController } from "./tenants/tenants.controller";
 
@@ -44,6 +46,7 @@ import { TenantsController } from "./tenants/tenants.controller";
     MpesaWebhookController,
     PayrollController,
     ComplianceController,
+    BillsController,
     HealthController,
   ],
   providers: [
@@ -57,6 +60,7 @@ import { TenantsController } from "./tenants/tenants.controller";
     PaymentsService,
     PayrollService,
     ComplianceService,
+    BillsService,
     // Provider selection is configuration: sandbox by default; the
     // production adapters activate via env once Phase-0 credentials exist.
     {

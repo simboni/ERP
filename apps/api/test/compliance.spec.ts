@@ -90,7 +90,9 @@ describe("compliance surface", () => {
     expect(draft.salesZeroRatedCents).toBe(500_000);
     expect(draft.salesExemptCents).toBe(200_000);
     expect(draft.outputVatCents).toBe(160_000);
-    expect(draft.inputVatCents).toBeNull();
+    expect(draft.inputVatCents).toBe(0); // no purchases recorded here
+    expect(draft.netVatCents).toBe(160_000);
+    expect(draft.billsMissingEtims).toBe(0);
     expect(draft.invoicesTotal).toBe(3);
     // Worker hasn't run in this suite; none signed yet.
     expect(draft.invoicesFiscalized).toBe(0);

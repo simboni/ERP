@@ -225,9 +225,19 @@ describe("ledger + invoicing", () => {
       { code: "4000", d: 0, c: 230_000 },
     ]);
 
-    // Fiscal doc enqueued with the invoice payload; worker signs it.
-    for (let i = 0; i < 10; i++) {
-      if (!(await fiscal.processOnce())) break;
+    // Fiscal doc enqueued with the invoice payload; worker signs it. The
+    // queue is shared with other suites' leftovers, so drain until OUR doc
+    // leaves the pending/signing states.
+    for (let i = 0; i < 50; i++) {
+      const status = await db.withTenant(tenant, user, async (c) => {
+        const r = await c.query(
+          "SELECT status FROM fiscal_documents WHERE id = $1",
+          [inv.fiscal_document_id],
+        );
+        return r.rows[0].status as string;
+      });
+      if (status !== "pending" && status !== "signing") break;
+      await fiscal.processOnce();
     }
     const fdoc = await db.withTenant(tenant, user, async (c) => {
       const r = await c.query(
