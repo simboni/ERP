@@ -10,12 +10,15 @@ import { FiscalService } from "../fiscal/fiscal.service";
 import { LedgerService } from "../ledger/ledger.service";
 import { AuditService } from "../audit/audit.service";
 import { NotificationsService } from "../notifications/notifications.service";
+import { InventoryService } from "../inventory/inventory.service";
 
 export interface InvoiceLineInput {
   description: string;
   quantity: number;
   unitPriceCents: number;
   vatRate: "0.16" | "0" | "exempt";
+  /** Catalogue item: stock decrements and COGS posts at issue. */
+  itemId?: string;
 }
 
 /**
@@ -32,6 +35,7 @@ export class InvoicesService {
     private readonly fiscal: FiscalService,
     private readonly audit: AuditService,
     @Optional() private readonly notifications?: NotificationsService,
+    @Optional() private readonly inventory?: InventoryService,
   ) {}
 
   computeLine(line: InvoiceLineInput): { totalCents: number; vatCents: number } {
@@ -81,8 +85,8 @@ export class InvoicesService {
       await client.query(
         `INSERT INTO invoice_lines
            (tenant_id, invoice_id, description, quantity, unit_price_cents,
-            vat_rate, line_total_cents, vat_cents)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            vat_rate, line_total_cents, vat_cents, item_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         [
           args.tenantId,
           invoiceId,
@@ -92,6 +96,7 @@ export class InvoicesService {
           line.vatRate,
           totalCents,
           vatCents,
+          line.itemId ?? null,
         ],
       );
     }
@@ -175,10 +180,54 @@ export class InvoicesService {
     // eTIMS: fiscalize atomically with the issue (02-kenya-compliance.md §1).
     const linesRes = await client.query(
       `SELECT description, quantity, unit_price_cents, vat_rate,
-              line_total_cents, vat_cents
+              line_total_cents, vat_cents, item_id
        FROM invoice_lines WHERE invoice_id = $1`,
       [args.invoiceId],
     );
+
+    // Inventory: decrement stock and post COGS for catalogue-item lines,
+    // atomic with the issue — overselling aborts the whole issue.
+    if (this.inventory) {
+      let cogsCents = 0;
+      for (const line of linesRes.rows as {
+        item_id: string | null;
+        quantity: string;
+      }[]) {
+        if (!line.item_id) continue;
+        const item = await client.query(
+          "SELECT cost_cents FROM items WHERE id = $1",
+          [line.item_id],
+        );
+        if (!item.rows[0]) throw new BadRequestException("Unknown item on invoice");
+        const qty = Number(line.quantity);
+        await this.inventory.recordMovement(client, {
+          tenantId: args.tenantId,
+          itemId: line.item_id,
+          branchId: inv.branch_id,
+          qtyDelta: -qty,
+          reason: "sale",
+          refType: "invoice",
+          refId: args.invoiceId,
+          userId: args.userId,
+        });
+        cogsCents += Math.round(Number(item.rows[0].cost_cents) * qty);
+      }
+      if (cogsCents > 0) {
+        await this.ledger.post(client, {
+          tenantId: args.tenantId,
+          postedBy: args.userId,
+          entryDate: args.issueDate,
+          memo: `COGS for invoice ${invoiceNo}`,
+          sourceType: "invoice_cogs",
+          sourceId: args.invoiceId,
+          idempotencyKey: `invoice-cogs:${args.invoiceId}`,
+          lines: [
+            { accountCode: "5000", debitCents: cogsCents },
+            { accountCode: "1200", creditCents: cogsCents },
+          ],
+        });
+      }
+    }
     const customerRes = await client.query(
       `SELECT name, kra_pin, phone FROM customers WHERE id = $1`,
       [inv.customer_id],

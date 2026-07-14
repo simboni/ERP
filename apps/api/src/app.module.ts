@@ -13,6 +13,8 @@ import { EtimsOscuProvider } from "./fiscal/oscu.provider";
 import { SandboxFiscalProvider } from "./fiscal/provider";
 import { DarajaPaymentProvider } from "./payments/daraja.provider";
 import { HealthController } from "./health.controller";
+import { InventoryController } from "./inventory/inventory.controller";
+import { InventoryService } from "./inventory/inventory.service";
 import { InvoicesController } from "./invoicing/invoices.controller";
 import { InvoicesService } from "./invoicing/invoices.service";
 import { LedgerService } from "./ledger/ledger.service";
@@ -56,6 +58,7 @@ import { TenantsController } from "./tenants/tenants.controller";
     PayrollController,
     ComplianceController,
     BillsController,
+    InventoryController,
     HealthController,
   ],
   providers: [
@@ -70,6 +73,7 @@ import { TenantsController } from "./tenants/tenants.controller";
     PayrollService,
     ComplianceService,
     BillsService,
+    InventoryService,
     NotificationsService,
     { provide: NOTIFICATION_PROVIDER, useClass: SandboxNotificationProvider },
     { provide: PAYOUT_PROVIDER, useClass: SandboxPayoutProvider },
