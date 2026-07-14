@@ -3,6 +3,8 @@ import { JwtModule } from "@nestjs/jwt";
 import { AuditService } from "./audit/audit.service";
 import { AuthController } from "./auth/auth.controller";
 import { AuthService } from "./auth/auth.service";
+import { ComplianceController } from "./compliance/compliance.controller";
+import { ComplianceService } from "./compliance/compliance.service";
 import { loadConfig } from "./config";
 import { DbService } from "./db/db.service";
 import { FiscalController } from "./fiscal/fiscal.controller";
@@ -41,6 +43,7 @@ import { TenantsController } from "./tenants/tenants.controller";
     PaymentsController,
     MpesaWebhookController,
     PayrollController,
+    ComplianceController,
     HealthController,
   ],
   providers: [
@@ -53,6 +56,7 @@ import { TenantsController } from "./tenants/tenants.controller";
     InvoicesService,
     PaymentsService,
     PayrollService,
+    ComplianceService,
     // Provider selection is configuration: sandbox by default; the
     // production adapters activate via env once Phase-0 credentials exist.
     {

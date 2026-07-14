@@ -23,24 +23,34 @@ interface InvoiceRow {
 interface Tenant {
   name: string;
 }
+interface Deadline {
+  key: string;
+  label: string;
+  dueDate: string;
+  daysRemaining: number;
+  overdue: boolean;
+}
 
 export default function Dashboard() {
   const router = useRouter();
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [tb, setTb] = useState<TrialRow[]>([]);
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
+  const [deadlines, setDeadlines] = useState<Deadline[]>([]);
   const [error, setError] = useState("");
 
   const load = useCallback(async (): Promise<void> => {
     try {
-      const [t, balances, inv] = await Promise.all([
+      const [t, balances, inv, dl] = await Promise.all([
         api<Tenant>("/tenants/current"),
         api<TrialRow[]>("/tenants/current/accounts/trial-balance"),
         api<InvoiceRow[]>("/tenants/current/invoices"),
+        api<Deadline[]>("/tenants/current/compliance/deadlines"),
       ]);
       setTenant(t);
       setTb(balances);
       setInvoices(inv);
+      setDeadlines(dl);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
     }
@@ -98,6 +108,20 @@ export default function Dashboard() {
         <Link href="/payments">Payments</Link> ·{" "}
         <Link href="/payroll">Payroll</Link>
       </p>
+
+      {deadlines.length > 0 && (
+        <div className="card">
+          <span className="muted">Statutory deadlines</span>
+          {deadlines.slice(0, 3).map((d) => (
+            <div key={d.key}>
+              {d.label} — <strong>{d.dueDate}</strong>{" "}
+              <span className={d.daysRemaining <= 5 ? "err" : "muted"}>
+                ({d.overdue ? "OVERDUE" : `${d.daysRemaining} days`})
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <h2>
         Invoices{" "}
