@@ -53,7 +53,15 @@ The full loop is verified live: signup → onboard → issue invoice → eTIMS s
 (control number + QR) → M-Pesa paybill webhook → invoice paid → trial balance
 nets to zero → every step in the audit trail.
 
-Next: web PWA (login → dashboard → invoicing UI), invoice PDF/WhatsApp delivery,
+5. **Web app v0** — login/signup, workspace picker, owner dashboard (cash,
+   receivables, VAT owed KRA), invoice creation UI — browser-verified.
+6. **Payroll module** — employees + statutory payroll runs computed from the
+   rules store as-of the period (NSSF year boundaries handled automatically),
+   maker-checker commit posting balanced wages/statutory/net entries.
+7. **Deployment packaging** — production Dockerfiles (non-root, pruned,
+   compiled migration runner), docker-compose stack, `docs/deploy.md`.
+
+Next: invoice PDF/WhatsApp delivery, refresh-token rotation, POS/offline spike,
 Daraja/OSCU production adapters. See `docs/roadmap/06-roadmap.md`.
 
 ## Development
