@@ -248,15 +248,17 @@ export class PaymentsService {
 
   /**
    * Match a confirmed payment to an open invoice and post the receipt.
-   * Match rule v1: account_ref parses to the invoice number (with optional
-   * INV- prefix) AND amounts are exactly equal AND invoice is issued.
+   * Partial payments are first-class: the allocation is capped at the
+   * invoice's outstanding balance; the invoice becomes 'paid' only when
+   * fully covered, and any overpayment stays visible as an AR credit
+   * (the ledger always books the full amount received).
    */
   async reconcile(
     client: PoolClient,
     tenantId: string,
     paymentId: string,
     forceInvoiceId?: string,
-  ): Promise<{ matched: boolean }> {
+  ): Promise<{ matched: boolean; allocatedCents?: number }> {
     const pRes = await client.query(
       `SELECT id, amount_cents, account_ref, invoice_id, journal_entry_id,
               state, receipt_number
@@ -272,38 +274,50 @@ export class PaymentsService {
     const targetInvoiceId: string | null =
       forceInvoiceId ?? payment.invoice_id ?? null;
 
-    let invoice: { id: string; invoice_no: string; total_cents: string } | undefined;
+    let invoice:
+      | {
+          id: string;
+          invoice_no: string;
+          total_cents: string;
+          amount_paid_cents: string;
+        }
+      | undefined;
     if (targetInvoiceId) {
       const r = await client.query(
-        `SELECT id, invoice_no, total_cents FROM invoices
+        `SELECT id, invoice_no, total_cents, amount_paid_cents FROM invoices
          WHERE id = $1 AND status = 'issued' FOR UPDATE`,
         [targetInvoiceId],
       );
       invoice = r.rows[0];
-      const mismatch =
-        invoice && Number(invoice.total_cents) !== Number(payment.amount_cents);
-      if (!invoice || mismatch) {
-        if (forceInvoiceId) {
-          if (!invoice) throw new NotFoundException("Open invoice not found");
-          throw new BadRequestException(
-            "Amount mismatch: partial payments land in a later piece",
-          );
-        }
+      if (!invoice) {
+        if (forceInvoiceId) throw new NotFoundException("Open invoice not found");
         return { matched: false }; // webhook path: to the exception queue
       }
     } else {
       const refDigits = /(\d+)\s*$/.exec(payment.account_ref ?? "")?.[1];
       if (!refDigits) return { matched: false };
       const r = await client.query(
-        `SELECT id, invoice_no, total_cents FROM invoices
-         WHERE invoice_no = $1 AND status = 'issued' AND total_cents = $2
+        `SELECT id, invoice_no, total_cents, amount_paid_cents FROM invoices
+         WHERE invoice_no = $1 AND status = 'issued'
          FOR UPDATE`,
-        [Number(refDigits), payment.amount_cents],
+        [Number(refDigits)],
       );
       invoice = r.rows[0];
       if (!invoice) return { matched: false };
     }
 
+    const outstanding =
+      Number(invoice.total_cents) - Number(invoice.amount_paid_cents);
+    const received = Number(payment.amount_cents);
+    const allocated = Math.min(received, outstanding);
+    if (allocated <= 0) {
+      if (forceInvoiceId) {
+        throw new BadRequestException("Invoice is already fully paid");
+      }
+      return { matched: false };
+    }
+
+    // Book the FULL amount received; overpayment shows as an AR credit.
     const posting = await this.ledger.post(client, {
       tenantId,
       postedBy: null,
@@ -313,17 +327,21 @@ export class PaymentsService {
       sourceId: paymentId,
       idempotencyKey: `payment:${paymentId}`,
       lines: [
-        { accountCode: "1010", debitCents: Number(payment.amount_cents) },
-        { accountCode: "1100", creditCents: Number(payment.amount_cents) },
+        { accountCode: "1010", debitCents: received },
+        { accountCode: "1100", creditCents: received },
       ],
     });
     await client.query(
       `UPDATE payments SET invoice_id = $2, journal_entry_id = $3 WHERE id = $1`,
       [paymentId, invoice.id, posting.entryId],
     );
+    const newPaid = Number(invoice.amount_paid_cents) + allocated;
     await client.query(
-      `UPDATE invoices SET status = 'paid' WHERE id = $1`,
-      [invoice.id],
+      `UPDATE invoices
+       SET amount_paid_cents = $2,
+           status = CASE WHEN $2 >= total_cents THEN 'paid' ELSE status END
+       WHERE id = $1`,
+      [invoice.id, newPaid],
     );
     await this.audit.record(client, {
       tenantId,
@@ -334,6 +352,7 @@ export class PaymentsService {
       payload: {
         invoiceNo: Number(invoice.invoice_no),
         amountCents: Number(payment.amount_cents),
+        allocatedCents: allocated,
         receipt: payment.receipt_number,
       },
     });
@@ -359,6 +378,6 @@ export class PaymentsService {
         },
       });
     }
-    return { matched: true };
+    return { matched: true, allocatedCents: allocated };
   }
 }

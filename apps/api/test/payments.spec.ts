@@ -191,8 +191,8 @@ describe("payments + reconciliation", () => {
     expect(status).toBe("paid");
   });
 
-  test("manual match with wrong amount is rejected", async () => {
-    const inv = await makeIssuedInvoice(999_900);
+  test("manual match with a smaller amount allocates partially", async () => {
+    const inv = await makeIssuedInvoice(999_900); // total 11,598.84
     await payments.handleC2bConfirmation({
       TransID: rcpt(3),
       TransAmount: "50.00",
@@ -206,11 +206,57 @@ describe("payments + reconciliation", () => {
       );
       return r.rows[0];
     });
-    await expect(
-      db.withTenant(tenant, user, (c) =>
-        payments.reconcile(c, tenant, unmatched.id, inv.id),
-      ),
-    ).rejects.toThrow(/Amount mismatch/);
+    const result = await db.withTenant(tenant, user, (c) =>
+      payments.reconcile(c, tenant, unmatched.id, inv.id),
+    );
+    expect(result).toEqual({ matched: true, allocatedCents: 5_000 });
+
+    const after = await db.withTenant(tenant, user, async (c) => {
+      const r = await c.query(
+        "SELECT status, amount_paid_cents FROM invoices WHERE id = $1",
+        [inv.id],
+      );
+      return r.rows[0];
+    });
+    expect(after.status).toBe("issued"); // still open
+    expect(Number(after.amount_paid_cents)).toBe(5_000);
+  });
+
+  test("instalments: two partial C2B payments fully settle an invoice", async () => {
+    const inv = await makeIssuedInvoice(500_000); // total 5,800.00
+    await payments.handleC2bConfirmation({
+      TransID: rcpt(5),
+      TransAmount: "3000.00",
+      BusinessShortCode: shortcode,
+      BillRefNumber: `INV-${inv.invoiceNo}`,
+      MSISDN: "254700000002",
+    });
+    const mid = await db.withTenant(tenant, user, async (c) => {
+      const r = await c.query(
+        "SELECT status, amount_paid_cents FROM invoices WHERE id = $1",
+        [inv.id],
+      );
+      return r.rows[0];
+    });
+    expect(mid.status).toBe("issued");
+    expect(Number(mid.amount_paid_cents)).toBe(300_000);
+
+    await payments.handleC2bConfirmation({
+      TransID: rcpt(6),
+      TransAmount: "2800.00",
+      BusinessShortCode: shortcode,
+      BillRefNumber: `INV-${inv.invoiceNo}`,
+      MSISDN: "254700000002",
+    });
+    const done = await db.withTenant(tenant, user, async (c) => {
+      const r = await c.query(
+        "SELECT status, amount_paid_cents FROM invoices WHERE id = $1",
+        [inv.id],
+      );
+      return r.rows[0];
+    });
+    expect(done.status).toBe("paid");
+    expect(Number(done.amount_paid_cents)).toBe(580_000);
   });
 
   test("STK: initiate -> pending -> success callback confirms and reconciles", async () => {
