@@ -1,0 +1,22 @@
+# HTTPS overlay: put Caddy in front of the app with automatic Let's
+# Encrypt certificates. Used by deploy/vps.sh when DOMAIN is set.
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    command: sh -c 'echo "$$DOMAIN { reverse_proxy app:3000 }" > /etc/caddy/Caddyfile && caddy run --config /etc/caddy/Caddyfile'
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - caddy_data:/data
+    depends_on:
+      - app
+
+  app:
+    ports: !override []
+
+volumes:
+  caddy_data:
