@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -220,6 +221,68 @@ export class AuthService {
    * and a new one is issued. Reuse of a revoked token is treated as theft —
    * every live token for that user is revoked (OWASP rotation guidance).
    */
+  /** Verify the current password, store a new hash, revoke sessions. */
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<{ changed: true }> {
+    const res = await this.db.query(
+      "SELECT password_hash FROM users WHERE id = $1",
+      [userId],
+    );
+    if (!res.rows[0]) throw new UnauthorizedException();
+    const ok = await argon2
+      .verify(res.rows[0].password_hash, currentPassword)
+      .catch(() => false);
+    if (!ok) throw new UnauthorizedException("Current password is incorrect");
+    const hash = await argon2.hash(newPassword, { type: argon2.argon2id });
+    await this.db.query("UPDATE users SET password_hash = $2 WHERE id = $1", [
+      userId,
+      hash,
+    ]);
+    // Other devices must re-authenticate with the new password.
+    await this.db.query("DELETE FROM refresh_tokens WHERE user_id = $1", [
+      userId,
+    ]);
+    return { changed: true };
+  }
+
+  /**
+   * Owner-driven reset for a locked-out team member. Refused when the
+   * target belongs to any other workspace — an owner must never be able
+   * to take over an account that also lives elsewhere.
+   */
+  async adminResetPassword(
+    tenantId: string,
+    targetUserId: string,
+  ): Promise<{ tempPassword: string }> {
+    const memberships = await this.db.query(
+      "SELECT tenant_id FROM memberships WHERE user_id = $1",
+      [targetUserId],
+    );
+    if (memberships.rows.length === 0) throw new UnauthorizedException();
+    if (
+      memberships.rows.some(
+        (m: { tenant_id: string }) => m.tenant_id !== tenantId,
+      )
+    ) {
+      throw new BadRequestException(
+        "This user belongs to other workspaces — they must reset from a signed-in device",
+      );
+    }
+    const tempPassword = `Jenga-${randomBytes(6).toString("hex")}`;
+    const hash = await argon2.hash(tempPassword, { type: argon2.argon2id });
+    await this.db.query("UPDATE users SET password_hash = $2 WHERE id = $1", [
+      targetUserId,
+      hash,
+    ]);
+    await this.db.query("DELETE FROM refresh_tokens WHERE user_id = $1", [
+      targetUserId,
+    ]);
+    return { tempPassword };
+  }
+
   async refresh(
     refreshToken: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {

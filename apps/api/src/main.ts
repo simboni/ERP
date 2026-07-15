@@ -2,7 +2,7 @@ import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import express from "express";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { AppModule } from "./app.module";
 import { requestLogger } from "./common/request-logger";
 import { loadConfig } from "./config";
@@ -104,7 +104,24 @@ async function bootstrap(): Promise<void> {
   // Same origin as the API => no CORS, no service discovery, one URL.
   const webDir = process.env.WEB_DIST ?? join(__dirname, "..", "web");
   if (existsSync(webDir)) {
-    app.use(express.static(webDir, { extensions: ["html"] }));
+    // Cache policy matters on mobile: hashed chunks are immutable, but
+    // HTML must always revalidate or phones keep serving a stale app
+    // whose old chunk URLs no longer exist (dead login button syndrome).
+    app.use(
+      express.static(webDir, {
+        extensions: ["html"],
+        setHeaders: (res, filePath) => {
+          if (filePath.includes(`${sep}_next${sep}static${sep}`)) {
+            res.setHeader(
+              "Cache-Control",
+              "public, max-age=31536000, immutable",
+            );
+          } else {
+            res.setHeader("Cache-Control", "no-cache");
+          }
+        },
+      }),
+    );
     console.log(`serving web app from ${webDir}`);
   }
   app.enableShutdownHooks();

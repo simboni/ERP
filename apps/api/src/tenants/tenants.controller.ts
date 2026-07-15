@@ -3,13 +3,17 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   NotFoundException,
+  Param,
+  ParseUUIDPipe,
   Post,
   UseGuards,
 } from "@nestjs/common";
 import type { Role, TenantTokenClaims } from "@jenga/shared";
 import { ROLES } from "@jenga/shared";
 import { AuditService } from "../audit/audit.service";
+import { AuthService } from "../auth/auth.service";
 import {
   JwtAuthGuard,
   Roles,
@@ -30,6 +34,7 @@ export class TenantsController {
   constructor(
     private readonly db: DbService,
     private readonly audit: AuditService,
+    private readonly auth: AuthService,
   ) {}
 
   @Get()
@@ -56,6 +61,47 @@ export class TenantsController {
       );
       return res.rows;
     });
+  }
+
+  /**
+   * Owner resets a locked-out member's password to a one-time temporary
+   * value shown once. AuthService refuses if the member also belongs to
+   * another workspace.
+   */
+  @Post("members/:userId/reset-password")
+  @HttpCode(200)
+  @Roles("owner")
+  async resetMemberPassword(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("userId", ParseUUIDPipe) targetUserId: string,
+  ) {
+    const membership = await this.db.withTenant(
+      claims.tid,
+      claims.sub,
+      async (client) => {
+        const r = await client.query(
+          "SELECT id FROM memberships WHERE user_id = $1 AND tenant_id = $2",
+          [targetUserId, claims.tid],
+        );
+        return r.rows[0];
+      },
+    );
+    if (!membership) throw new NotFoundException("Not a member here");
+    const result = await this.auth.adminResetPassword(
+      claims.tid,
+      targetUserId,
+    );
+    await this.db.withTenant(claims.tid, claims.sub, (client) =>
+      this.audit.record(client, {
+        tenantId: claims.tid,
+        actorUserId: claims.sub,
+        action: "member.password_reset",
+        entityType: "user",
+        entityId: targetUserId,
+        payload: {},
+      }),
+    );
+    return result;
   }
 
   @Post("members")

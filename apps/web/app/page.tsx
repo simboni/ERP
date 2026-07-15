@@ -26,6 +26,7 @@ export default function AuthPage() {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [fullName, setFullName] = useState("");
   const [tenantName, setTenantName] = useState("");
   const [memberships, setMemberships] = useState<Membership[] | null>(null);
@@ -155,13 +156,34 @@ export default function AuthPage() {
             required
           />
           <label>{t("password")}</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            minLength={10}
-            required
-          />
+          <div style={{ position: "relative" }}>
+            <input
+              type={showPw ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              minLength={10}
+              required
+              style={{ paddingRight: 44 }}
+            />
+            <button
+              type="button"
+              aria-label={showPw ? "Hide password" : "Show password"}
+              onClick={() => setShowPw((v) => !v)}
+              style={{
+                position: "absolute",
+                right: 6,
+                top: "50%",
+                transform: "translateY(-50%)",
+                margin: 0,
+                padding: "2px 8px",
+                background: "transparent",
+                color: "var(--muted)",
+                fontSize: "1rem",
+              }}
+            >
+              {showPw ? "🙈" : "👁"}
+            </button>
+          </div>
           {error && <div className="err">{error}</div>}
           <button disabled={busy} type="submit">
             {mode === "login" ? t("signIn") : t("createWorkspace")}

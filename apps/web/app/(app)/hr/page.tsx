@@ -74,6 +74,7 @@ interface Attendance {
 }
 interface Member {
   id: string;
+  user_id: string;
   full_name: string;
   email: string;
   role: string;
@@ -772,6 +773,7 @@ export default function HrPage() {
                   <th>Name</th>
                   <th>Email</th>
                   <th>Role</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -781,6 +783,28 @@ export default function HrPage() {
                     <td className="muted">{m.email}</td>
                     <td>
                       <span className="pill sent">{m.role}</span>
+                    </td>
+                    <td>
+                      {m.role !== "owner" && (
+                        <button
+                          type="button"
+                          className="secondary dt-btn"
+                          style={{ marginTop: 0 }}
+                          onClick={() =>
+                            void act(async () => {
+                              const r = await api<{ tempPassword: string }>(
+                                `/tenants/current/members/${m.user_id}/reset-password`,
+                                { method: "POST" },
+                              );
+                              setMsg(
+                                `Temporary password for ${m.full_name}: ${r.tempPassword} — share it privately; they should change it in Settings immediately. Shown only once.`,
+                              );
+                            })
+                          }
+                        >
+                          Reset password
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

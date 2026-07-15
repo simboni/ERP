@@ -10,6 +10,9 @@ export default function SettingsPage() {
   const [shortcode, setShortcode] = useState("");
   const [totp, setTotp] = useState<{ secret: string; otpauth: string } | null>(null);
   const [totpCode, setTotpCode] = useState("");
+  const [curPw, setCurPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [showNewPw, setShowNewPw] = useState(false);
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -95,6 +98,64 @@ export default function SettingsPage() {
         <input value={shortcode} onChange={(e) => setShortcode(e.target.value)} />
         <button disabled={busy || !/^\d{5,7}$/.test(shortcode)} onClick={() => void registerShortcode()}>
           Register shortcode
+        </button>
+      </div>
+
+      <h2>Security — password</h2>
+      <div className="card">
+        <p className="muted">
+          Locked out on your phone? Set a new password here (letters and
+          numbers, no quotes or spaces type easiest on mobile keyboards),
+          then sign in on the phone with it. All other devices are signed
+          out when it changes.
+        </p>
+        <label>Current password</label>
+        <input
+          type="password"
+          value={curPw}
+          onChange={(e) => setCurPw(e.target.value)}
+        />
+        <label>New password (min 10 characters)</label>
+        <div style={{ position: "relative" }}>
+          <input
+            type={showNewPw ? "text" : "password"}
+            value={newPw}
+            onChange={(e) => setNewPw(e.target.value)}
+            style={{ paddingRight: 44 }}
+          />
+          <button
+            type="button"
+            onClick={() => setShowNewPw((v) => !v)}
+            style={{
+              position: "absolute",
+              right: 6,
+              top: "50%",
+              transform: "translateY(-50%)",
+              margin: 0,
+              padding: "2px 8px",
+              background: "transparent",
+              color: "var(--muted)",
+            }}
+          >
+            {showNewPw ? "🙈" : "👁"}
+          </button>
+        </div>
+        <button
+          disabled={busy || newPw.length < 10 || !curPw}
+          onClick={() =>
+            void act(async () => {
+              await api("/auth/change-password", {
+                method: "POST",
+                body: { currentPassword: curPw, newPassword: newPw },
+                token: getUserToken(),
+              });
+              setCurPw("");
+              setNewPw("");
+              return "Password changed — use the new one on all devices.";
+            })()
+          }
+        >
+          Change password
         </button>
       </div>
 

@@ -90,6 +90,31 @@ export class AuthController {
     return this.auth.verifyTotpLogin(body.mfaToken, body.code);
   }
 
+  /** Authenticated password change: verify the current, set the new. */
+  @Post("change-password")
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  async changePassword(
+    @UserId() userId: string,
+    @Body() body: { currentPassword?: string; newPassword?: string },
+  ) {
+    if (!body?.currentPassword || !body?.newPassword) {
+      throw new BadRequestException(
+        "currentPassword and newPassword are required",
+      );
+    }
+    if (body.newPassword.length < 10) {
+      throw new BadRequestException(
+        "newPassword must be at least 10 characters",
+      );
+    }
+    return this.auth.changePassword(
+      userId,
+      body.currentPassword,
+      body.newPassword,
+    );
+  }
+
   @Post("refresh")
   @HttpCode(200)
   async refresh(@Body() body: { refreshToken?: string }) {
