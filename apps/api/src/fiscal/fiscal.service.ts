@@ -7,6 +7,7 @@ import {
 import { Pool } from "pg";
 import type { PoolClient } from "pg";
 import { loadConfig } from "../config";
+import { makePool } from "../db/pool";
 import {
   FiscalPermanentError,
   FiscalProvider,
@@ -53,10 +54,7 @@ export class FiscalService implements OnModuleInit, OnModuleDestroy {
   constructor(
     @Inject(FISCAL_PROVIDER) private readonly provider: FiscalProvider,
   ) {
-    this.workerPool = new Pool({
-      connectionString: loadConfig().workerDbUrl,
-      max: 2,
-    });
+    this.workerPool = makePool(loadConfig().workerDbUrl, 2);
   }
 
   onModuleInit(): void {

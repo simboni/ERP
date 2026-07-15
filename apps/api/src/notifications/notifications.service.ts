@@ -7,6 +7,7 @@ import {
 import { Pool } from "pg";
 import type { PoolClient } from "pg";
 import { loadConfig } from "../config";
+import { makePool } from "../db/pool";
 
 export const NOTIFICATION_PROVIDER = "NOTIFICATION_PROVIDER";
 
@@ -64,10 +65,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   constructor(
     @Inject(NOTIFICATION_PROVIDER) private readonly provider: NotificationProvider,
   ) {
-    this.workerPool = new Pool({
-      connectionString: loadConfig().workerDbUrl,
-      max: 2,
-    });
+    this.workerPool = makePool(loadConfig().workerDbUrl, 2);
   }
 
   onModuleInit(): void {

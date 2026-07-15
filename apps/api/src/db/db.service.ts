@@ -1,6 +1,7 @@
 import { Injectable, OnModuleDestroy } from "@nestjs/common";
 import { Pool, PoolClient } from "pg";
 import { loadConfig } from "../config";
+import { makePool } from "./pool";
 
 /**
  * Database access with the RLS tenancy contract (04-architecture.md §3):
@@ -20,10 +21,7 @@ export class DbService implements OnModuleDestroy {
   readonly pool: Pool;
 
   constructor() {
-    this.pool = new Pool({
-      connectionString: loadConfig().appDbUrl,
-      max: 10,
-    });
+    this.pool = makePool(loadConfig().appDbUrl, 10);
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -70,7 +68,9 @@ export class DbService implements OnModuleDestroy {
       await client.query("COMMIT");
       return result;
     } catch (err) {
-      await client.query("ROLLBACK");
+      // A dead connection makes ROLLBACK itself throw — always surface
+      // the original error, not the rollback failure.
+      await client.query("ROLLBACK").catch(() => undefined);
       throw err;
     } finally {
       client.release();

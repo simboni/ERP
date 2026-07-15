@@ -48,6 +48,20 @@ async function preflightDb(): Promise<void> {
   }
 }
 
+/**
+ * Last-resort safety net: a financial system's API must degrade, not die.
+ * Anything that escapes local handling (a library emitting 'error' with no
+ * listener, a stray rejection) is logged in full; the process keeps
+ * serving and /health keeps reporting real state. Restart-on-crash still
+ * exists at the platform layer for genuinely unrecoverable states.
+ */
+process.on("uncaughtException", (err) => {
+  console.error("UNCAUGHT EXCEPTION (continuing):", err);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("UNHANDLED REJECTION (continuing):", reason);
+});
+
 async function bootstrap(): Promise<void> {
   await preflightDb();
   const app = await NestFactory.create(AppModule);
