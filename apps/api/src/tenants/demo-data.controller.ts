@@ -16,7 +16,7 @@ import {
 import { DbService } from "../db/db.service";
 import { InvoicesService } from "../invoicing/invoices.service";
 import { QuotesService } from "../invoicing/quotes.service";
-import { LedgerService } from "../ledger/ledger.service";
+import { LedgerService, seedDefaultAccounts } from "../ledger/ledger.service";
 import { PaymentsService } from "../payments/payments.service";
 import { BillsService } from "../purchases/bills.service";
 import { PayrollService } from "../payroll/payroll.service";
@@ -84,6 +84,9 @@ export class DemoDataController {
       employees: 0,
       payrollRuns: 0,
       stockMovements: 0,
+      projects: 0,
+      tasks: 0,
+      folders: 0,
     };
 
     // Guard: only on a tenant that hasn't been seeded.
@@ -96,6 +99,10 @@ export class DemoDataController {
           "Demo data appears to be loaded already (50+ customers exist).",
         );
       }
+      // The seeder posts expenses, bills and payroll to the ledger, so the
+      // chart of accounts must exist first — otherwise the first posting
+      // fails with "Unknown account code".
+      await seedDefaultAccounts(client, claims.tid);
     });
 
     // 1. Branch (reuse or create), customers, items, employees, suppliers.
@@ -388,6 +395,163 @@ export class DemoDataController {
     });
     } catch {
       // payroll seeding is best-effort
+    }
+
+    // 8. Business profile: fill the tenant's own details so invoices,
+    // quotes and receipts print a complete letterhead out of the box.
+    try {
+      await this.db.withTenant(claims.tid, claims.sub, async (client) => {
+        await client.query(
+          `UPDATE tenants SET
+             legal_name       = coalesce(legal_name, name),
+             kra_pin          = coalesce(kra_pin, $2),
+             vat_number       = coalesce(vat_number, $3),
+             phone            = coalesce(phone, $4),
+             email            = coalesce(email, $5),
+             physical_address = coalesce(physical_address, $6),
+             postal_address   = coalesce(postal_address, $7),
+             invoice_footer   = coalesce(invoice_footer, $8)
+           WHERE id = $1`,
+          [
+            claims.tid,
+            `P05${int(1000000, 9999999)}Q`,
+            `0${int(100000, 999999)}X`,
+            `+2547${int(10000000, 99999999)}`,
+            "accounts@demo.jenga.co.ke",
+            `${pick(TOWNS)} Business Park, Nairobi`,
+            `P.O. Box ${int(100, 99999)}-00100, Nairobi`,
+            "Thank you for your business — asante kwa biashara.",
+          ],
+        );
+      });
+    } catch {
+      // profile seeding is best-effort (columns may predate a deploy)
+    }
+
+    // 9. Projects: a few live jobs with tasks across the board, a
+    // milestone and logged time — so the PM module opens populated.
+    try {
+      await this.db.withTenant(claims.tid, claims.sub, async (client) => {
+        const emps = await client.query(
+          "SELECT id FROM employees ORDER BY created_at LIMIT 6",
+        );
+        const empIds: string[] = emps.rows.map((r) => r.id);
+        const projNames = [
+          "Office fit-out — Westlands",
+          "POS rollout — 4 branches",
+          "Annual audit support",
+          "Website & branding refresh",
+        ];
+        const taskTitles = [
+          "Site survey and measurements",
+          "Prepare BoQ and quote",
+          "Client sign-off",
+          "Procure materials",
+          "Installation week 1",
+          "Snag list and handover",
+        ];
+        const statuses = ["done", "done", "in_progress", "todo", "todo", "blocked"];
+        const prios = ["high", "medium", "medium", "low", "high", "medium"];
+        for (let p = 0; p < projNames.length; p++) {
+          const proj = await client.query(
+            `INSERT INTO projects
+               (tenant_id, customer_id, name, status, budget_cents,
+                hourly_rate_cents, description, created_by)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+            [
+              claims.tid,
+              base.customerIds[p] ?? null,
+              projNames[p],
+              p === 2 ? "completed" : "active",
+              int(2000, 20000) * 100 * 10,
+              int(1500, 4000) * 100,
+              "Seeded sample project for demonstration.",
+              claims.sub,
+            ],
+          );
+          const projId = proj.rows[0].id;
+          counts.projects++;
+          for (let t = 0; t < taskTitles.length; t++) {
+            const st = statuses[t];
+            await client.query(
+              `INSERT INTO project_tasks
+                 (tenant_id, project_id, title, status, priority,
+                  assignee_employee_id, due_date, estimate_hours, sort_order,
+                  created_by, completed_at)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+              [
+                claims.tid,
+                projId,
+                taskTitles[t],
+                st,
+                prios[t],
+                empIds[t % Math.max(1, empIds.length)] ?? null,
+                daysAgo(int(-20, 20)).toISOString().slice(0, 10),
+                int(2, 16),
+                t,
+                claims.sub,
+                st === "done" ? daysAgo(int(1, 20)).toISOString() : null,
+              ],
+            );
+            counts.tasks++;
+          }
+          await client.query(
+            `INSERT INTO project_milestones
+               (tenant_id, project_id, name, due_date, status, reached_at,
+                created_by)
+             VALUES ($1,$2,'Phase 1 delivered',$3,$4,$5,$6)`,
+            [
+              claims.tid,
+              projId,
+              daysAgo(int(-30, -5)).toISOString().slice(0, 10),
+              p < 2 ? "reached" : "open",
+              p < 2 ? daysAgo(int(1, 10)).toISOString() : null,
+              claims.sub,
+            ],
+          );
+          if (empIds[0]) {
+            await client.query(
+              `INSERT INTO project_time_entries
+                 (tenant_id, project_id, employee_id, entry_date, hours,
+                  note, billable, created_by)
+               VALUES ($1,$2,$3,$4,$5,'On-site work',true,$6)`,
+              [
+                claims.tid,
+                projId,
+                empIds[0],
+                daysAgo(int(1, 20)).toISOString().slice(0, 10),
+                int(3, 8),
+                claims.sub,
+              ],
+            );
+          }
+        }
+      });
+    } catch {
+      // projects seeding is best-effort (tables may predate a deploy)
+    }
+
+    // 10. Document folders: a starter filing structure so the DMS opens
+    // with a tree rather than an empty root.
+    try {
+      await this.db.withTenant(claims.tid, claims.sub, async (client) => {
+        for (const name of [
+          "Contracts",
+          "Licenses & permits",
+          "Receipts",
+          "Statutory filings",
+          "Staff records",
+        ]) {
+          await client.query(
+            `INSERT INTO document_folders (tenant_id, name, created_by)
+             VALUES ($1, $2, $3)`,
+            [claims.tid, name, claims.sub],
+          );
+          counts.folders++;
+        }
+      });
+    } catch {
+      // folders seeding is best-effort
     }
 
     return { seeded: true, counts };
