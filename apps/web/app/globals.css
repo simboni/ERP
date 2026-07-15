@@ -1167,6 +1167,37 @@ button.avatar:hover { background: var(--brand-strong); }
   .quick-actions button { flex: 1 1 auto; }
 }
 
+/* ---- documents (DMS) ---- */
+.dms-layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 16px; align-items: start; }
+.dms-tree { position: sticky; top: 12px; }
+.dms-tree-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.dms-tree-head h3 { margin: 0; }
+.dms-folder { display: flex; align-items: center; gap: 6px; width: 100%; padding: 7px 10px; border-radius: 8px;
+  border: 1px solid transparent; background: none; color: var(--ink); text-align: left; cursor: pointer; font-size: 0.9rem; }
+.dms-folder:hover { background: var(--brand-soft); }
+.dms-folder.active { background: var(--brand-soft); border-color: var(--brand); color: var(--brand); font-weight: 600; }
+.dms-folder .dms-folder-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dms-folder .dms-count { font-size: 0.76rem; opacity: 0.7; font-variant-numeric: tabular-nums; }
+.dms-folder-row { display: flex; align-items: center; gap: 2px; }
+.dms-folder-row .dms-fbtn { opacity: 0; background: none; border: none; cursor: pointer; padding: 4px 6px; font-size: 0.8rem;
+  color: var(--muted); border-radius: 6px; margin-top: 0; }
+.dms-folder-row:hover .dms-fbtn { opacity: 1; }
+.dms-folder-row .dms-fbtn:hover { background: var(--line-soft); color: var(--ink); }
+.dms-tags { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.dms-tag { font-size: 0.72rem; padding: 2px 7px; border-radius: 999px; background: var(--tile-2-bg); color: var(--tile-2-ink); font-weight: 600; }
+.dms-drop { border: 1.5px dashed var(--line); border-radius: 10px; padding: 18px; text-align: center; transition: 0.15s;
+  background: var(--surface-soft, transparent); cursor: pointer; }
+.dms-drop.over { border-color: var(--brand); background: var(--brand-soft); }
+.dms-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+.dms-form-grid label { display: block; font-size: 0.84rem; font-weight: 550; margin-bottom: 4px; }
+.dms-form-grid .full { grid-column: 1 / -1; }
+@media (max-width: 760px) {
+  .dms-layout { grid-template-columns: 1fr; }
+  .dms-tree { position: static; }
+  .dms-form-grid { grid-template-columns: 1fr; }
+  .dms-folder-row .dms-fbtn { opacity: 1; }
+}
+
 /* ---- print ---- */
 @media print {
   .sidebar, .topbar, .quick-actions, .tabs, button, .no-print { display: none !important; }
