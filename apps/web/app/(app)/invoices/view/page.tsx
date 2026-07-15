@@ -281,6 +281,31 @@ function InvoiceView() {
         </div>
       )}
 
+      {inv.status === "draft" && !editing && (
+        <div className="card">
+          <h2 style={{ marginTop: 0 }}>Ready to issue?</h2>
+          <p className="muted">
+            Issuing fiscalizes this invoice with KRA eTIMS and posts it to
+            your books. After that it cannot be edited — only corrected with
+            a credit note.
+          </p>
+          <button
+            disabled={busy}
+            onClick={() =>
+              void act(async () => {
+                const r = await api<{ invoiceNo: number }>(
+                  `/tenants/current/invoices/${id}/issue`,
+                  { method: "POST" },
+                );
+                return `Invoice ${r.invoiceNo} issued and sent to eTIMS.`;
+              })()
+            }
+          >
+            Issue invoice (eTIMS)
+          </button>
+        </div>
+      )}
+
       {inv.status === "issued" && outstanding > 0 && (
         <div className="card">
           <h2 style={{ marginTop: 0 }}>Collect via M-Pesa</h2>

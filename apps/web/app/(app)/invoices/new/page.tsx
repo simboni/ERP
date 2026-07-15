@@ -68,8 +68,7 @@ export default function NewInvoice() {
     setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
   };
 
-  const submit = async (e: React.FormEvent): Promise<void> => {
-    e.preventDefault();
+  const submit = async (issueNow: boolean): Promise<void> => {
     setBusy(true);
     setError("");
     try {
@@ -107,12 +106,15 @@ export default function NewInvoice() {
           })),
         },
       });
-      await api(`/tenants/current/invoices/${draft.id}/issue`, {
-        method: "POST",
-      });
-      router.push("/dashboard");
+      if (issueNow) {
+        await api(`/tenants/current/invoices/${draft.id}/issue`, {
+          method: "POST",
+        });
+      }
+      // Land on the invoice itself: drafts show Edit + Issue there.
+      router.push(`/invoices/view?id=${draft.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to issue invoice");
+      setError(err instanceof Error ? err.message : "Failed to save invoice");
     } finally {
       setBusy(false);
     }
@@ -122,7 +124,7 @@ export default function NewInvoice() {
     <>
       <h1>New invoice</h1>
       <p className="muted">Issued invoices are fiscalized with KRA eTIMS automatically.</p>
-      <form onSubmit={(e) => void submit(e)}>
+      <form onSubmit={(e) => e.preventDefault()}>
         <div className="card">
           <div className="row">
             <div>
@@ -217,9 +219,23 @@ export default function NewInvoice() {
         >
           + Add line
         </button>{" "}
-        <button disabled={busy} type="submit">
+        <button
+          type="button"
+          className="secondary"
+          disabled={busy}
+          onClick={() => void submit(false)}
+        >
+          Save as draft
+        </button>{" "}
+        <button disabled={busy} type="button" onClick={() => void submit(true)}>
           Issue invoice (eTIMS)
         </button>
+        <p className="muted">
+          Save as draft to review or edit later — drafts can be changed
+          freely and are only fiscalized when you issue them. Once issued,
+          an invoice is final; a faulty issued invoice is corrected with a
+          credit note from its page.
+        </p>
         {error && <div className="err">{error}</div>}
       </form>
     </>
