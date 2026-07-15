@@ -30,8 +30,14 @@ evaluate.
 
    For the two secrets, any long random strings work — e.g. run
    `openssl rand -hex 32` twice, or use a password generator (60+ chars).
-   `${{Postgres.DATABASE_URL}}` must be typed exactly like that — it is a
-   Railway reference to the database you just created.
+
+   **`ADMIN_DB_URL` is a reference, and the part before the dot must match
+   your database service's name.** If your Postgres service is named
+   `jenga-db`, the value is `${{jenga-db.DATABASE_URL}}`. Easiest way to
+   get it right: add the variable with name `ADMIN_DB_URL`, and in the
+   value field type `${{` — Railway pops up an autocomplete of every
+   service/variable; pick your database's `DATABASE_URL`. If the value
+   shows as empty, the service name in the reference is wrong.
 6. **Settings → Networking → Generate Domain** → when asked for the port,
    enter **3000**.
 7. Click **Deploy** (or it deploys on its own after the variable changes).
