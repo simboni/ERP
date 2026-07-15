@@ -1,16 +1,28 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, fmtKes, getTenantToken } from "@/lib/api";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { api, fmtKes } from "@/lib/api";
 
 interface Item {
   id: string;
   sku: string;
   name: string;
   price_cents: string;
+  cost_cents?: string;
   vat_rate: string;
   track_stock: boolean;
+  active?: boolean;
+  reorder_level?: string;
 }
+interface SaleRow {
+  id: string;
+  invoice_no: string | null;
+  status: string;
+  total_cents: string;
+  customer_name: string;
+  issue_date: string | null;
+}
+type Tab = "sell" | "items" | "today";
 interface StockLevel {
   item_id: string;
   qty: string;
@@ -35,7 +47,10 @@ interface SaleResult {
 }
 
 export default function PosPage() {
+  const [tab, setTab] = useState<Tab>("sell");
   const [items, setItems] = useState<Item[]>([]);
+  const [sales, setSales] = useState<SaleRow[]>([]);
+  const [newItem, setNewItem] = useState({ sku: "", name: "", priceKes: "", costKes: "", reorder: "" });
   const [stock, setStock] = useState<Record<string, number>>({});
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchId] = useState("");
@@ -51,36 +66,48 @@ export default function PosPage() {
   const [tenantName, setTenantName] = useState("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
+  const load = (): void => {
     Promise.all([
       api<Item[]>("/tenants/current/items"),
       api<StockLevel[]>("/tenants/current/stock/levels").catch(
         () => [] as StockLevel[],
       ),
       api<Branch[]>("/tenants/current/branches"),
+      api<SaleRow[]>("/tenants/current/invoices").catch(() => [] as SaleRow[]),
     ])
-      .then(([its, lvls, brs]) => {
+      .then(([its, lvls, brs, inv]) => {
         setItems(its);
         setStock(
           Object.fromEntries(lvls.map((l) => [l.item_id, Number(l.qty)])),
         );
         setBranches(brs);
-        if (brs[0]) setBranchId(brs[0].id);
+        setBranchId((b) => b || (brs[0]?.id ?? ""));
+        const today = new Date().toISOString().slice(0, 10);
+        setSales(inv.filter((i) => i.issue_date?.slice(0, 10) === today));
       })
       .catch((e) => setError(e instanceof Error ? e.message : "load failed"));
-    setTenantName(sessionStorage.getItem("jenga.tenantName") ?? "");
+  };
+  useEffect(() => {
+    load();
+    try {
+      setTenantName(sessionStorage.getItem("jenga.tenantName") ?? "");
+    } catch {
+      /* private mode */
+    }
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filtered = useMemo(
     () =>
       items.filter(
         (i) =>
-          !q ||
+          i.active !== false &&
+          (!q ||
           i.name.toLowerCase().includes(q.toLowerCase()) ||
-          i.sku.toLowerCase().includes(q.toLowerCase()),
+          i.sku.toLowerCase().includes(q.toLowerCase())),
       ),
     [items, q],
   );
@@ -253,8 +280,30 @@ export default function PosPage() {
 
   return (
     <>
-      <h1>Sell</h1>
+      <h1>Sell (POS)</h1>
+      <div className="tabs">
+        {(
+          [
+            ["sell", "Sell"],
+            ["items", `Items (${items.length})`],
+            ["today", `Today's sales (${sales.length})`],
+          ] as [Tab, string][]
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            className={tab === key ? "tab active" : "tab"}
+            onClick={() => {
+              setTab(key);
+              setError("");
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       {error && <div className="err">{error}</div>}
+      {tab === "sell" && (
       <div className="pos-grid">
         <div>
           <input
@@ -415,6 +464,181 @@ export default function PosPage() {
           </button>
         </div>
       </div>
+      )}
+
+      {tab === "items" && (
+        <>
+          <div className="card">
+            <div className="card-head">
+              <h3>Add item</h3>
+            </div>
+            <div className="row">
+              <div>
+                <label>SKU</label>
+                <input value={newItem.sku} onChange={(e) => setNewItem({ ...newItem, sku: e.target.value })} />
+              </div>
+              <div style={{ flex: 2 }}>
+                <label>Name</label>
+                <input value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} />
+              </div>
+              <div>
+                <label>Selling price (KES)</label>
+                <input type="number" value={newItem.priceKes} onChange={(e) => setNewItem({ ...newItem, priceKes: e.target.value })} />
+              </div>
+              <div>
+                <label>Cost (KES)</label>
+                <input type="number" value={newItem.costKes} onChange={(e) => setNewItem({ ...newItem, costKes: e.target.value })} />
+              </div>
+              <div>
+                <label>Reorder at</label>
+                <input type="number" value={newItem.reorder} onChange={(e) => setNewItem({ ...newItem, reorder: e.target.value })} />
+              </div>
+            </div>
+            <button
+              disabled={!newItem.sku || !newItem.name}
+              onClick={() => {
+                setError("");
+                api("/tenants/current/items", {
+                  method: "POST",
+                  body: {
+                    sku: newItem.sku,
+                    name: newItem.name,
+                    priceCents: Math.round(Number(newItem.priceKes || 0) * 100),
+                    costCents: Math.round(Number(newItem.costKes || 0) * 100),
+                  },
+                })
+                  .then(async (created: unknown) => {
+                    const id = (created as { id: string }).id;
+                    if (Number(newItem.reorder) > 0) {
+                      await api(`/tenants/current/items/${id}/reorder-level`, {
+                        method: "POST",
+                        body: { reorderLevel: Number(newItem.reorder) },
+                      });
+                    }
+                    setNewItem({ sku: "", name: "", priceKes: "", costKes: "", reorder: "" });
+                    load();
+                  })
+                  .catch((e) => setError(e instanceof Error ? e.message : "failed"));
+              }}
+            >
+              Add item
+            </button>
+          </div>
+
+          <div className="card">
+            <div className="card-head">
+              <h3>Catalog</h3>
+            </div>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>SKU</th>
+                    <th>Name</th>
+                    <th className="num">Price (KES)</th>
+                    <th className="num">In stock</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((i) => (
+                    <tr key={i.id} style={i.active === false ? { opacity: 0.5 } : undefined}>
+                      <td className="muted">{i.sku}</td>
+                      <td>{i.name}</td>
+                      <td className="num">
+                        <input
+                          type="number"
+                          defaultValue={Number(i.price_cents) / 100}
+                          style={{ maxWidth: 110, padding: "4px 8px", textAlign: "right" }}
+                          onBlur={(e) => {
+                            const v = Math.round(Number(e.target.value || 0) * 100);
+                            if (v !== Number(i.price_cents) && v >= 0) {
+                              void api(`/tenants/current/items/${i.id}`, {
+                                method: "PATCH",
+                                body: { priceCents: v },
+                              }).then(load).catch((er) => setError(er instanceof Error ? er.message : "failed"));
+                            }
+                          }}
+                        />
+                      </td>
+                      <td className="num">{stock[i.id] ?? "—"}</td>
+                      <td>
+                        <span className={`pill ${i.active === false ? "void" : "paid"}`}>
+                          {i.active === false ? "archived" : "active"}
+                        </span>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="secondary dt-btn"
+                          style={{ marginTop: 0 }}
+                          onClick={() =>
+                            void api(`/tenants/current/items/${i.id}`, {
+                              method: "PATCH",
+                              body: { active: i.active === false },
+                            }).then(load).catch((er) => setError(er instanceof Error ? er.message : "failed"))
+                          }
+                        >
+                          {i.active === false ? "Restore" : "Archive"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="muted">
+              Prices save when you click away from the field. Archived items
+              disappear from the Sell grid but keep their history.
+            </p>
+          </div>
+        </>
+      )}
+
+      {tab === "today" && (
+        <div className="card">
+          <div className="card-head">
+            <h3>Today's sales</h3>
+          </div>
+          {sales.length === 0 ? (
+            <div className="empty">
+              <span className="empty-icon">🛒</span>
+              <p>No sales yet today — the first one is a tap away.</p>
+              <button type="button" onClick={() => setTab("sell")}>Sell</button>
+            </div>
+          ) : (
+            <>
+              <div className="pos-total">
+                <span>Total today ({sales.length} sales)</span>
+                <span className="stat">
+                  {fmtKes(sales.reduce((t, sl) => t + Number(sl.total_cents), 0))}
+                </span>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>No.</th>
+                    <th>Customer</th>
+                    <th className="num">Total</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sales.map((sl) => (
+                    <tr key={sl.id}>
+                      <td>{sl.invoice_no ?? "draft"}</td>
+                      <td>{sl.customer_name}</td>
+                      <td className="num">{fmtKes(sl.total_cents)}</td>
+                      <td><span className={`pill ${sl.status}`}>{sl.status}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+        </div>
+      )}
     </>
   );
 }

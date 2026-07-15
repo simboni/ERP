@@ -90,7 +90,7 @@ export class PosController {
       const itemIds = cart.map((l) => l.itemId!);
       const itemsRes = await client.query(
         `SELECT id, name, price_cents, vat_rate FROM items
-         WHERE id = ANY($1::uuid[])`,
+         WHERE id = ANY($1::uuid[]) AND active`,
         [itemIds],
       );
       const byId = new Map<string, (typeof itemsRes.rows)[number]>(

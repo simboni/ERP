@@ -6,6 +6,7 @@ import {
   HttpCode,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   UseGuards,
 } from "@nestjs/common";
@@ -75,10 +76,56 @@ export class InventoryController {
     return this.db.withTenant(claims.tid, claims.sub, async (client) => {
       const res = await client.query(
         `SELECT id, sku, name, unit, cost_cents, price_cents, vat_rate,
-                track_stock, reorder_level
-         FROM items ORDER BY sku LIMIT 500`,
+                track_stock, reorder_level, active
+         FROM items ORDER BY active DESC, sku LIMIT 500`,
       );
       return res.rows;
+    });
+  }
+
+  /** Edit an item's catalog fields; omit a field to keep it unchanged. */
+  @Patch("items/:id")
+  @Roles(...STOCK_ROLES)
+  async editItem(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) itemId: string,
+    @Body()
+    body: {
+      name?: string;
+      unit?: string;
+      costCents?: number;
+      priceCents?: number;
+      vatRate?: "0.16" | "0" | "exempt";
+      active?: boolean;
+      reorderLevel?: number;
+    },
+  ) {
+    return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const res = await client.query(
+        `UPDATE items SET
+           name          = coalesce($2, name),
+           unit          = coalesce($3, unit),
+           cost_cents    = coalesce($4, cost_cents),
+           price_cents   = coalesce($5, price_cents),
+           vat_rate      = coalesce($6, vat_rate),
+           active        = coalesce($7, active),
+           reorder_level = coalesce($8, reorder_level)
+         WHERE id = $1
+         RETURNING id, sku, name, unit, cost_cents, price_cents, vat_rate,
+                   track_stock, active, reorder_level`,
+        [
+          itemId,
+          body.name?.trim() || null,
+          body.unit?.trim() || null,
+          Number.isInteger(body.costCents) ? body.costCents : null,
+          Number.isInteger(body.priceCents) ? body.priceCents : null,
+          body.vatRate ?? null,
+          typeof body.active === "boolean" ? body.active : null,
+          Number.isFinite(body.reorderLevel) ? body.reorderLevel : null,
+        ],
+      );
+      if (!res.rows[0]) throw new BadRequestException("Item not found");
+      return res.rows[0];
     });
   }
 

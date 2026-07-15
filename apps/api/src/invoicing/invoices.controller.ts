@@ -6,6 +6,7 @@ import {
   NotFoundException,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Res,
   UseGuards,
@@ -61,6 +62,36 @@ export class InvoicesController {
     return this.db.withTenant(claims.tid, claims.sub, (client) =>
       this.ledger.trialBalance(client),
     );
+  }
+
+  @Patch("customers/:id")
+  @Roles(...SALES_ROLES)
+  async editCustomer(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) customerId: string,
+    @Body()
+    body: { name?: string; kraPin?: string; phone?: string; email?: string },
+  ) {
+    return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const res = await client.query(
+        `UPDATE customers SET
+           name    = coalesce($2, name),
+           kra_pin = coalesce($3, kra_pin),
+           phone   = coalesce($4, phone),
+           email   = coalesce($5, email)
+         WHERE id = $1
+         RETURNING id, name, kra_pin, phone, email`,
+        [
+          customerId,
+          body.name?.trim() || null,
+          body.kraPin?.trim() || null,
+          body.phone?.trim() || null,
+          body.email?.trim() || null,
+        ],
+      );
+      if (!res.rows[0]) throw new NotFoundException("Customer not found");
+      return res.rows[0];
+    });
   }
 
   @Post("customers")
@@ -240,6 +271,26 @@ export class InvoicesController {
         "Content-Disposition": `inline; filename="invoice-${data.invoice_no ?? "draft"}.pdf"`,
       })
       .send(pdf);
+  }
+
+  @Patch("invoices/:id")
+  @Roles(...SALES_ROLES)
+  async editDraft(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) invoiceId: string,
+    @Body() body: { dueDate?: string; lines?: InvoiceLineInput[] },
+  ) {
+    if (!Array.isArray(body?.lines)) {
+      throw new BadRequestException("lines are required");
+    }
+    return this.db.withTenant(claims.tid, claims.sub, (client) =>
+      this.invoices.replaceDraftLines(client, {
+        tenantId: claims.tid,
+        invoiceId,
+        dueDate: body.dueDate,
+        lines: body.lines!,
+      }),
+    );
   }
 
   @Get("invoices/:id")

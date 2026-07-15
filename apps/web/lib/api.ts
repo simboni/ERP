@@ -27,35 +27,69 @@ export async function getApiBase(): Promise<string> {
   return getApiBaseSync();
 }
 
+/**
+ * Storage that never throws: some mobile private-browsing modes block
+ * sessionStorage entirely, which must degrade to an in-memory session,
+ * not a crashed login.
+ */
+const memStore = new Map<string, string>();
+function storeGet(key: string): string | null {
+  try {
+    return sessionStorage.getItem(key) ?? memStore.get(key) ?? null;
+  } catch {
+    return memStore.get(key) ?? null;
+  }
+}
+function storeSet(key: string, value: string): void {
+  memStore.set(key, value);
+  try {
+    sessionStorage.setItem(key, value);
+  } catch {
+    /* private mode: in-memory only */
+  }
+}
+function storeDel(key: string): void {
+  memStore.delete(key);
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function getUserToken(): string | null {
-  return sessionStorage.getItem("jenga.userToken");
+  return storeGet("jenga.userToken");
 }
 export function getTenantToken(): string | null {
-  return sessionStorage.getItem("jenga.tenantToken");
+  return storeGet("jenga.tenantToken");
 }
 export function setUserToken(t: string): void {
-  sessionStorage.setItem("jenga.userToken", t);
+  storeSet("jenga.userToken", t);
 }
 export function setTenantToken(t: string): void {
-  sessionStorage.setItem("jenga.tenantToken", t);
+  storeSet("jenga.tenantToken", t);
 }
 export function getRefreshToken(): string | null {
-  return sessionStorage.getItem("jenga.refreshToken");
+  return storeGet("jenga.refreshToken");
 }
 export function setRefreshToken(t: string): void {
-  sessionStorage.setItem("jenga.refreshToken", t);
+  storeSet("jenga.refreshToken", t);
 }
 export function getTenantId(): string | null {
-  return sessionStorage.getItem("jenga.tenantId");
+  return storeGet("jenga.tenantId");
 }
 export function setTenantId(id: string): void {
-  sessionStorage.setItem("jenga.tenantId", id);
+  storeSet("jenga.tenantId", id);
 }
 export function clearTokens(): void {
-  sessionStorage.removeItem("jenga.userToken");
-  sessionStorage.removeItem("jenga.tenantToken");
-  sessionStorage.removeItem("jenga.refreshToken");
-  sessionStorage.removeItem("jenga.tenantId");
+  for (const k of [
+    "jenga.userToken",
+    "jenga.tenantToken",
+    "jenga.refreshToken",
+    "jenga.tenantId",
+  ]) {
+    storeDel(k);
+  }
 }
 
 /**

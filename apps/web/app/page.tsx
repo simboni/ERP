@@ -82,7 +82,7 @@ export default function AuthPage() {
         "/auth/login",
         {
           method: "POST",
-          body: { email, password },
+          body: { email: email.trim(), password },
         },
       );
       setUserToken(login.accessToken);
@@ -145,6 +145,11 @@ export default function AuthPage() {
           <label>{t("email")}</label>
           <input
             type="email"
+            inputMode="email"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required

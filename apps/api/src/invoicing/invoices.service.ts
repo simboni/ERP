@@ -264,6 +264,70 @@ export class InvoicesService {
     return { creditNoteNo, fiscalDocumentId: fiscalDoc.id };
   }
 
+  /**
+   * Replace all lines on a DRAFT invoice — the edit path. Issued
+   * documents are immutable (corrections go through credit notes), so
+   * this guards on status and recomputes totals from scratch.
+   */
+  async replaceDraftLines(
+    client: PoolClient,
+    args: {
+      tenantId: string;
+      invoiceId: string;
+      dueDate?: string;
+      lines: InvoiceLineInput[];
+    },
+  ): Promise<{ id: string; totalCents: number }> {
+    if (!args.lines.length) {
+      throw new BadRequestException("An invoice needs at least one line");
+    }
+    const inv = await client.query(
+      "SELECT id, status FROM invoices WHERE id = $1 FOR UPDATE",
+      [args.invoiceId],
+    );
+    if (!inv.rows[0]) throw new NotFoundException("Invoice not found");
+    if (inv.rows[0].status !== "draft") {
+      throw new BadRequestException(
+        "Only draft invoices can be edited — issue corrections as credit notes",
+      );
+    }
+    await client.query("DELETE FROM invoice_lines WHERE invoice_id = $1", [
+      args.invoiceId,
+    ]);
+    let subtotal = 0;
+    let vat = 0;
+    for (const line of args.lines) {
+      const { totalCents, vatCents } = this.computeLine(line);
+      subtotal += totalCents;
+      vat += vatCents;
+      await client.query(
+        `INSERT INTO invoice_lines
+           (tenant_id, invoice_id, description, quantity, unit_price_cents,
+            vat_rate, line_total_cents, vat_cents, item_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          args.tenantId,
+          args.invoiceId,
+          line.description,
+          line.quantity,
+          line.unitPriceCents,
+          line.vatRate,
+          totalCents,
+          vatCents,
+          line.itemId ?? null,
+        ],
+      );
+    }
+    await client.query(
+      `UPDATE invoices
+       SET subtotal_cents = $2, vat_cents = $3, total_cents = $4,
+           due_date = coalesce($5, due_date)
+       WHERE id = $1`,
+      [args.invoiceId, subtotal, vat, subtotal + vat, args.dueDate ?? null],
+    );
+    return { id: args.invoiceId, totalCents: subtotal + vat };
+  }
+
   async issue(
     client: PoolClient,
     args: { tenantId: string; userId: string; invoiceId: string; issueDate: string },

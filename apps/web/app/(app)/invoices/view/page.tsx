@@ -33,6 +33,10 @@ function InvoiceView() {
   const [inv, setInv] = useState<InvoiceDetail | null>(null);
   const [msisdn, setMsisdn] = useState("");
   const [creditReason, setCreditReason] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [editLines, setEditLines] = useState<
+    { description: string; quantity: string; unitKes: string; vatRate: string }[]
+  >([]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
@@ -145,6 +149,137 @@ function InvoiceView() {
 
       {msg && <div className="card" style={{ borderColor: "var(--brand)" }}>{msg}</div>}
       {error && <div className="err">{error}</div>}
+
+      {inv.status === "draft" && (
+        <div className="card">
+          <div className="card-head">
+            <h3>Edit entries (draft)</h3>
+          </div>
+          {!editing ? (
+            <button
+              className="secondary"
+              onClick={() => {
+                setEditLines(
+                  inv.lines.map((l) => ({
+                    description: l.description,
+                    quantity: String(Number(l.quantity)),
+                    unitKes: String(Number(l.unit_price_cents) / 100),
+                    vatRate: l.vat_rate,
+                  })),
+                );
+                setEditing(true);
+              }}
+            >
+              Edit lines
+            </button>
+          ) : (
+            <>
+              {editLines.map((l, i) => (
+                <div className="row" key={i} style={{ alignItems: "flex-end" }}>
+                  <div style={{ flex: 2 }}>
+                    <label>Description</label>
+                    <input
+                      value={l.description}
+                      onChange={(e) =>
+                        setEditLines((ls) => ls.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label>Qty</label>
+                    <input
+                      type="number"
+                      min="0.001"
+                      step="0.001"
+                      value={l.quantity}
+                      onChange={(e) =>
+                        setEditLines((ls) => ls.map((x, j) => (j === i ? { ...x, quantity: e.target.value } : x)))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label>Unit (KES)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={l.unitKes}
+                      onChange={(e) =>
+                        setEditLines((ls) => ls.map((x, j) => (j === i ? { ...x, unitKes: e.target.value } : x)))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label>VAT</label>
+                    <select
+                      value={l.vatRate}
+                      onChange={(e) =>
+                        setEditLines((ls) => ls.map((x, j) => (j === i ? { ...x, vatRate: e.target.value } : x)))
+                      }
+                    >
+                      <option value="0.16">16%</option>
+                      <option value="0">0%</option>
+                      <option value="exempt">Exempt</option>
+                    </select>
+                  </div>
+                  <div style={{ flex: 0 }}>
+                    <button
+                      type="button"
+                      className="secondary dt-btn"
+                      style={{ marginTop: 0 }}
+                      onClick={() => setEditLines((ls) => ls.filter((_, j) => j !== i))}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <div className="quick-actions">
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() =>
+                    setEditLines((ls) => [...ls, { description: "", quantity: "1", unitKes: "", vatRate: "0.16" }])
+                  }
+                >
+                  + Add line
+                </button>
+                <button
+                  disabled={busy || editLines.length === 0}
+                  onClick={() =>
+                    void act(async () => {
+                      await api(`/tenants/current/invoices/${id}`, {
+                        method: "PATCH",
+                        body: {
+                          lines: editLines
+                            .filter((l) => l.description.trim() && Number(l.quantity) > 0)
+                            .map((l) => ({
+                              description: l.description.trim(),
+                              quantity: Number(l.quantity),
+                              unitPriceCents: Math.round(Number(l.unitKes || 0) * 100),
+                              vatRate: l.vatRate,
+                            })),
+                        },
+                      });
+                      setEditing(false);
+                      return "Draft updated.";
+                    })()
+                  }
+                >
+                  Save changes
+                </button>
+                <button type="button" className="secondary" onClick={() => setEditing(false)}>
+                  Discard
+                </button>
+              </div>
+            </>
+          )}
+          <p className="muted">
+            Issued invoices are immutable by law — corrections after issuing
+            go through a credit note below.
+          </p>
+        </div>
+      )}
 
       {inv.status === "issued" && outstanding > 0 && (
         <div className="card">
