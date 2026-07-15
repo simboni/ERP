@@ -50,13 +50,25 @@ async function preflightDb(): Promise<void> {
       } finally {
         await admin.end().catch(() => undefined);
       }
+      if (bypasses && process.env.ALLOW_INSECURE_DB_FALLBACK !== "true") {
+        // NEVER serve cross-tenant data. Without a working RLS-bound role
+        // the app stays up (health reports the true state) but requests
+        // fail loudly instead of silently leaking other tenants' books.
+        console.error(
+          `CRITICAL: runtime DB role connection failed (${reason}) and the ` +
+            "ADMIN_DB_URL role bypasses row level security (superuser/" +
+            "BYPASSRLS). REFUSING to use it for tenant traffic — requests " +
+            "will fail until jenga_app/jenga_worker are provisioned " +
+            "(docs/deploy-render.md). Set ALLOW_INSECURE_DB_FALLBACK=true " +
+            "only for a single-tenant emergency.",
+        );
+        return;
+      }
       console.error(
         bypasses
-          ? `CRITICAL: runtime DB role connection failed (${reason}); ` +
-              "falling back to an owner connection that BYPASSES row level " +
-              "security. TENANT ISOLATION IS NOT ENFORCED until jenga_app/" +
-              "jenga_worker are provisioned (docs/deploy-render.md). Do not " +
-              "serve multiple tenants in this state."
+          ? "CRITICAL: serving on an RLS-bypassing owner connection because " +
+              "ALLOW_INSECURE_DB_FALLBACK=true. TENANT ISOLATION IS NOT " +
+              "ENFORCED — do not serve multiple tenants in this state."
           : `WARNING: runtime DB role connection failed (${reason}); ` +
               "falling back to the owner connection. Tenant isolation " +
               "remains enforced by FORCE ROW LEVEL SECURITY, but provision " +
