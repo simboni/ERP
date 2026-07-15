@@ -146,6 +146,7 @@ const NAV: NavSection[] = [
       { href: "/suppliers", labelKey: "navSuppliers", icon: "truck" },
       { href: "/inventory", labelKey: "navInventory", icon: "box" },
       { href: "/documents", labelKey: "navDocuments", icon: "quote" },
+      { href: "/projects", labelKey: "navProjects", icon: "box" },
     ],
   },
   {
