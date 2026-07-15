@@ -53,6 +53,50 @@ interface Employee {
   department: string | null;
 }
 
+interface SalaryHistoryRow {
+  id: string;
+  effective_date: string;
+  gross_cents: string;
+  note: string;
+}
+interface EmployeeNote {
+  id: string;
+  kind: string;
+  body: string;
+  noted_on: string;
+}
+interface Training {
+  id: string;
+  name: string;
+  provider: string;
+  scheduled_on: string;
+  completed: boolean;
+  attendee_count: number;
+  attendees: string[];
+}
+interface WorkforceReport {
+  departments: { department: string; employees: number; gross_cents: string }[];
+  totals: {
+    headcount: number;
+    grossCents: number;
+    inactive: number;
+    avgTenureMonths: number | null;
+  };
+  upcomingTrainings: {
+    id: string;
+    name: string;
+    provider: string;
+    scheduled_on: string;
+  }[];
+  recentSalaryChanges: {
+    id: string;
+    full_name: string;
+    effective_date: string;
+    gross_cents: string;
+    note: string;
+  }[];
+}
+
 type Tab =
   | "overview"
   | "employees"
@@ -60,7 +104,16 @@ type Tab =
   | "leave"
   | "team"
   | "departments"
-  | "announcements";
+  | "announcements"
+  | "development"
+  | "workforce";
+
+const NOTE_KIND_PILL: Record<string, string> = {
+  performance: "paid",
+  training: "sent",
+  disciplinary: "overdue",
+  general: "pending",
+};
 
 interface AttendanceToday {
   employee_id: string;
@@ -129,6 +182,19 @@ export default function HrPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("cashier");
+  // HR+ — development & workforce
+  const [trainings, setTrainings] = useState<Training[]>([]);
+  const [workforce, setWorkforce] = useState<WorkforceReport | null>(null);
+  const [trName, setTrName] = useState("");
+  const [trProvider, setTrProvider] = useState("");
+  const [trDate, setTrDate] = useState("");
+  const [attendeePick, setAttendeePick] = useState<Record<string, string>>({});
+  const [noteEmp, setNoteEmp] = useState("");
+  const [notes, setNotes] = useState<EmployeeNote[]>([]);
+  const [noteKind, setNoteKind] = useState("general");
+  const [noteBody, setNoteBody] = useState("");
+  const [noteDate, setNoteDate] = useState("");
+  const [salHist, setSalHist] = useState<SalaryHistoryRow[]>([]);
 
   useEffect(() => {
     const tick = (): void =>
@@ -158,8 +224,10 @@ export default function HrPage() {
       api<Announcement[]>("/tenants/current/hr/announcements"),
       api<Attendance>("/tenants/current/hr/attendance"),
       api<Member[]>("/tenants/current/members").catch(() => [] as Member[]),
+      api<Training[]>("/tenants/current/hr/trainings"),
+      api<WorkforceReport>("/tenants/current/hr/workforce-report"),
     ])
-      .then(([o, e, d, p, r, a, att, m]) => {
+      .then(([o, e, d, p, r, a, att, m, tr, wf]) => {
         setOverview(o);
         setEmployees(e);
         setDepartments(d);
@@ -168,6 +236,8 @@ export default function HrPage() {
         setAnnouncements(a);
         setAttendance(att);
         setMembers(m);
+        setTrainings(tr);
+        setWorkforce(wf);
       })
       .catch(fail);
   }, []);
@@ -175,6 +245,34 @@ export default function HrPage() {
   useEffect(() => {
     loadAll();
   }, [loadAll]);
+
+  // Per-employee notes for the Development tab.
+  const loadNotes = useCallback((employeeId: string) => {
+    if (!employeeId) {
+      setNotes([]);
+      return;
+    }
+    api<EmployeeNote[]>(`/tenants/current/hr/employees/${employeeId}/notes`)
+      .then(setNotes)
+      .catch(fail);
+  }, []);
+
+  useEffect(() => {
+    loadNotes(noteEmp);
+  }, [noteEmp, loadNotes]);
+
+  // Salary history mini-table for the employee edit card.
+  useEffect(() => {
+    if (!editEmp) {
+      setSalHist([]);
+      return;
+    }
+    api<SalaryHistoryRow[]>(
+      `/tenants/current/hr/employees/${editEmp.id}/salary-history`,
+    )
+      .then(setSalHist)
+      .catch(fail);
+  }, [editEmp]);
 
   const act = async (fn: () => Promise<unknown>, note?: string) => {
     setError("");
@@ -225,6 +323,8 @@ export default function HrPage() {
             ["team", "Team access"],
             ["departments", "Departments"],
             ["announcements", "Announcements"],
+            ["development", "Development"],
+            ["workforce", "Workforce"],
           ] as [Tab, string][]
         ).map(([key, label]) => (
           <button
@@ -608,6 +708,36 @@ export default function HrPage() {
               >
                 Cancel
               </button>
+              <div className="card-head" style={{ marginTop: 18 }}>
+                <h3>Salary history</h3>
+              </div>
+              {salHist.length === 0 ? (
+                <p className="muted">
+                  No salary changes recorded yet — saving a new gross adds a
+                  dated entry here automatically.
+                </p>
+              ) : (
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Effective</th>
+                        <th className="num">Gross</th>
+                        <th>Note</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {salHist.map((s) => (
+                        <tr key={s.id}>
+                          <td>{d10(s.effective_date)}</td>
+                          <td className="num">{fmtKes0(s.gross_cents)}</td>
+                          <td className="muted">{s.note || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 
@@ -1241,6 +1371,406 @@ export default function HrPage() {
                 </div>
               ))
             )}
+          </div>
+        </>
+      )}
+
+      {tab === "development" && (
+        <>
+          <div className="row">
+            <div className="card">
+              <div className="card-head">
+                <h3>Schedule a training</h3>
+              </div>
+              <label>Training</label>
+              <input
+                value={trName}
+                onChange={(e) => setTrName(e.target.value)}
+                placeholder="e.g. First Aid & Fire Safety"
+              />
+              <label>Provider</label>
+              <input
+                value={trProvider}
+                onChange={(e) => setTrProvider(e.target.value)}
+                placeholder="Optional"
+              />
+              <label>Scheduled on</label>
+              <input
+                type="date"
+                value={trDate}
+                onChange={(e) => setTrDate(e.target.value)}
+              />
+              <button
+                disabled={!trName.trim() || !trDate}
+                onClick={() =>
+                  void act(
+                    () =>
+                      api("/tenants/current/hr/trainings", {
+                        method: "POST",
+                        body: {
+                          name: trName,
+                          provider: trProvider || undefined,
+                          scheduledOn: trDate,
+                        },
+                      }).then(() => {
+                        setTrName("");
+                        setTrProvider("");
+                        setTrDate("");
+                      }),
+                    "Training scheduled — add attendees from the list below.",
+                  )
+                }
+              >
+                Schedule
+              </button>
+            </div>
+            <div className="card">
+              <div className="card-head">
+                <h3>Employee notes</h3>
+              </div>
+              <label>Employee</label>
+              <select
+                value={noteEmp}
+                onChange={(e) => setNoteEmp(e.target.value)}
+              >
+                <option value="">Select…</option>
+                {activeEmployees.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.full_name}
+                  </option>
+                ))}
+              </select>
+              {noteEmp && (
+                <>
+                  {notes.length === 0 ? (
+                    <p className="muted">No notes for this employee yet.</p>
+                  ) : (
+                    notes.map((n) => (
+                      <div
+                        key={n.id}
+                        style={{
+                          padding: "8px 0",
+                          borderBottom: "1px solid var(--line-soft)",
+                        }}
+                      >
+                        <span
+                          className={`pill ${NOTE_KIND_PILL[n.kind] ?? "sent"}`}
+                        >
+                          {n.kind}
+                        </span>{" "}
+                        <span className="muted">· {d10(n.noted_on)}</span>
+                        <p style={{ margin: "4px 0 0" }}>{n.body}</p>
+                      </div>
+                    ))
+                  )}
+                  <div className="row">
+                    <div>
+                      <label>Kind</label>
+                      <select
+                        value={noteKind}
+                        onChange={(e) => setNoteKind(e.target.value)}
+                      >
+                        {[
+                          "performance",
+                          "training",
+                          "disciplinary",
+                          "general",
+                        ].map((k) => (
+                          <option key={k} value={k}>
+                            {k}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label>Date</label>
+                      <input
+                        type="date"
+                        value={noteDate}
+                        onChange={(e) => setNoteDate(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <label>Note</label>
+                  <textarea
+                    rows={2}
+                    value={noteBody}
+                    onChange={(e) => setNoteBody(e.target.value)}
+                  />
+                  <button
+                    disabled={!noteBody.trim()}
+                    onClick={() =>
+                      void act(
+                        () =>
+                          api(
+                            `/tenants/current/hr/employees/${noteEmp}/notes`,
+                            {
+                              method: "POST",
+                              body: {
+                                kind: noteKind,
+                                body: noteBody,
+                                notedOn: noteDate || undefined,
+                              },
+                            },
+                          ).then(() => {
+                            setNoteBody("");
+                            setNoteDate("");
+                            loadNotes(noteEmp);
+                          }),
+                        "Note added.",
+                      )
+                    }
+                  >
+                    Add note
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-head">
+              <h3>Trainings</h3>
+            </div>
+            <DataTable
+              rows={trainings}
+              csvName="trainings"
+              searchKeys={["name", "provider"]}
+              pageSizeDefault={10}
+              empty={
+                <p className="muted">
+                  No trainings yet — schedule the first one above.
+                </p>
+              }
+              columns={[
+                { key: "name", label: "Training" },
+                {
+                  key: "provider",
+                  label: "Provider",
+                  render: (r: Training) => (
+                    <span className="muted">{r.provider || "—"}</span>
+                  ),
+                },
+                {
+                  key: "scheduled_on",
+                  label: "Scheduled",
+                  value: (r: Training) => d10(r.scheduled_on),
+                },
+                {
+                  key: "attendees",
+                  label: "Attendees",
+                  value: (r: Training) => r.attendees.join(", "),
+                  render: (r: Training) =>
+                    r.attendee_count === 0 ? (
+                      <span className="muted">—</span>
+                    ) : (
+                      <span>
+                        {r.attendees.join(", ")}{" "}
+                        <span className="muted">({r.attendee_count})</span>
+                      </span>
+                    ),
+                },
+                {
+                  key: "completed",
+                  label: "Status",
+                  value: (r: Training) => (r.completed ? "completed" : "upcoming"),
+                  render: (r: Training) => (
+                    <span className={`pill ${r.completed ? "paid" : "pending"}`}>
+                      {r.completed ? "completed" : "upcoming"}
+                    </span>
+                  ),
+                },
+                {
+                  key: "actions",
+                  label: "",
+                  value: () => null,
+                  render: (r: Training) =>
+                    r.completed ? (
+                      <span className="muted">done</span>
+                    ) : (
+                      <span
+                        style={{
+                          display: "flex",
+                          gap: 6,
+                          alignItems: "center",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        <select
+                          value={attendeePick[r.id] ?? ""}
+                          style={{ maxWidth: 150, padding: "5px 8px" }}
+                          onChange={(ev) =>
+                            setAttendeePick((m) => ({
+                              ...m,
+                              [r.id]: ev.target.value,
+                            }))
+                          }
+                        >
+                          <option value="">Add attendee…</option>
+                          {activeEmployees.map((e) => (
+                            <option key={e.id} value={e.id}>
+                              {e.full_name}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          className="secondary dt-btn"
+                          style={{ marginTop: 0 }}
+                          disabled={!attendeePick[r.id]}
+                          onClick={() =>
+                            void act(
+                              () =>
+                                api(
+                                  `/tenants/current/hr/trainings/${r.id}/attendees`,
+                                  {
+                                    method: "POST",
+                                    body: { employeeId: attendeePick[r.id] },
+                                  },
+                                ).then(() =>
+                                  setAttendeePick((m) => ({ ...m, [r.id]: "" })),
+                                ),
+                              "Attendee added.",
+                            )
+                          }
+                        >
+                          Add
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary dt-btn"
+                          style={{ marginTop: 0 }}
+                          onClick={() =>
+                            void act(
+                              () =>
+                                api(
+                                  `/tenants/current/hr/trainings/${r.id}/complete`,
+                                  { method: "POST" },
+                                ),
+                              "Training marked complete.",
+                            )
+                          }
+                        >
+                          ✓ Complete
+                        </button>
+                      </span>
+                    ),
+                },
+              ]}
+            />
+          </div>
+        </>
+      )}
+
+      {tab === "workforce" && (
+        <>
+          <div className="tiles">
+            {(
+              [
+                ["tile-3", String(workforce?.totals.headcount ?? 0), "Headcount"],
+                [
+                  "tile-1",
+                  fmtKes0(workforce?.totals.grossCents ?? 0),
+                  "Gross payroll / month",
+                ],
+                [
+                  "tile-2",
+                  workforce?.totals.avgTenureMonths != null
+                    ? `${workforce.totals.avgTenureMonths} mo`
+                    : "—",
+                  "Average tenure",
+                ],
+                [
+                  "tile-4",
+                  String(workforce?.totals.inactive ?? 0),
+                  "Attrition (inactive)",
+                ],
+              ] as [string, string, string][]
+            ).map(([cls, value, label]) => (
+              <div key={label} className={`tile ${cls}`}>
+                <div className="tile-value">{value}</div>
+                <div className="tile-label">{label}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="card">
+            <div className="card-head">
+              <h3>By department</h3>
+            </div>
+            {(workforce?.departments ?? []).length === 0 ? (
+              <p className="muted">No active employees yet.</p>
+            ) : (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Department</th>
+                      <th className="num">People</th>
+                      <th className="num">Gross / month</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {workforce!.departments.map((d) => (
+                      <tr key={d.department}>
+                        <td>{d.department}</td>
+                        <td className="num">{d.employees}</td>
+                        <td className="num">{fmtKes0(d.gross_cents)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="row">
+            <div className="card">
+              <div className="card-head">
+                <h3>Upcoming trainings (next 60 days)</h3>
+              </div>
+              {(workforce?.upcomingTrainings ?? []).length === 0 ? (
+                <p className="muted">
+                  Nothing scheduled — plan one on the Development tab.
+                </p>
+              ) : (
+                workforce!.upcomingTrainings.map((t) => (
+                  <div key={t.id} className="bar-row">
+                    <span style={{ flex: 1 }}>
+                      {t.name}
+                      {t.provider && (
+                        <span className="muted"> · {t.provider}</span>
+                      )}
+                    </span>
+                    <span className="pill sent">{d10(t.scheduled_on)}</span>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="card">
+              <div className="card-head">
+                <h3>Recent salary changes (last 90 days)</h3>
+              </div>
+              {(workforce?.recentSalaryChanges ?? []).length === 0 ? (
+                <p className="muted">No salary changes recorded.</p>
+              ) : (
+                workforce!.recentSalaryChanges.map((s) => (
+                  <div key={s.id} className="bar-row">
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      {s.full_name}
+                      <br />
+                      <span className="muted">
+                        {d10(s.effective_date)}
+                        {s.note ? ` · ${s.note}` : ""}
+                      </span>
+                    </span>
+                    <span className="num" style={{ whiteSpace: "nowrap" }}>
+                      {fmtKes0(s.gross_cents)}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </>
       )}

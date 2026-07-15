@@ -22,11 +22,14 @@ import { DbService } from "../db/db.service";
 
 const HR_ROLES = ["owner", "admin"] as const;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const NOTE_KINDS = ["performance", "training", "disciplinary", "general"];
 
 /**
  * HR suite: departments & designations, leave management with per-policy
  * annual balances (approved days count against days_per_year for the
- * request's calendar year), and announcements. All tenant-scoped via RLS.
+ * request's calendar year), and announcements. HR+ adds salary history
+ * (auto-recorded on gross changes), employee notes, trainings with
+ * attendee rosters, and a workforce report. All tenant-scoped via RLS.
  */
 @Controller("tenants/current/hr")
 @UseGuards(JwtAuthGuard, TenantContextGuard, RolesGuard)
@@ -152,6 +155,12 @@ export class HrController {
       throw new BadRequestException("status must be active | inactive");
     }
     return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const before = await client.query(
+        "SELECT gross_cents::bigint AS gross_cents FROM employees WHERE id = $1",
+        [employeeId],
+      );
+      if (!before.rows[0]) throw new BadRequestException("Employee not found");
+      const oldGross = Number(before.rows[0].gross_cents);
       const res = await client.query(
         `UPDATE employees
          SET department_id = coalesce($2, department_id),
@@ -176,7 +185,260 @@ export class HrController {
         ],
       );
       if (!res.rows[0]) throw new BadRequestException("Employee not found");
+      // Salary history: one date-stamped row per actual gross change.
+      if (body.grossCents !== undefined && body.grossCents !== oldGross) {
+        await client.query(
+          `INSERT INTO employee_salary_history
+             (tenant_id, employee_id, effective_date, gross_cents, note, created_by)
+           VALUES ($1, $2, current_date, $3, $4, $5)`,
+          [
+            claims.tid,
+            employeeId,
+            body.grossCents,
+            `Changed from KES ${(oldGross / 100).toLocaleString("en-KE")}`,
+            claims.sub,
+          ],
+        );
+      }
       return res.rows[0];
+    });
+  }
+
+  @Get("employees/:id/salary-history")
+  async salaryHistory(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) employeeId: string,
+  ) {
+    return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const res = await client.query(
+        `SELECT id, effective_date, gross_cents::bigint AS gross_cents,
+                note, created_at
+         FROM employee_salary_history
+         WHERE employee_id = $1
+         ORDER BY effective_date DESC, created_at DESC
+         LIMIT 200`,
+        [employeeId],
+      );
+      return res.rows;
+    });
+  }
+
+  @Get("employees/:id/notes")
+  async listNotes(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) employeeId: string,
+  ) {
+    return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const res = await client.query(
+        `SELECT id, kind, body, noted_on, created_at
+         FROM employee_notes
+         WHERE employee_id = $1
+         ORDER BY noted_on DESC, created_at DESC
+         LIMIT 200`,
+        [employeeId],
+      );
+      return res.rows;
+    });
+  }
+
+  @Post("employees/:id/notes")
+  @Roles(...HR_ROLES)
+  async createNote(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) employeeId: string,
+    @Body() body: { kind?: string; body?: string; notedOn?: string },
+  ) {
+    if (!NOTE_KINDS.includes(body?.kind ?? "")) {
+      throw new BadRequestException(
+        `kind must be one of: ${NOTE_KINDS.join(", ")}`,
+      );
+    }
+    if (!body?.body?.trim()) throw new BadRequestException("body is required");
+    if (body.notedOn !== undefined && !DATE_RE.test(body.notedOn)) {
+      throw new BadRequestException("notedOn must be YYYY-MM-DD");
+    }
+    return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const emp = await client.query(
+        "SELECT id FROM employees WHERE id = $1",
+        [employeeId],
+      );
+      if (!emp.rows[0]) throw new BadRequestException("Employee not found");
+      const res = await client.query(
+        `INSERT INTO employee_notes
+           (tenant_id, employee_id, kind, body, noted_on, created_by)
+         VALUES ($1, $2, $3, $4, coalesce($5::date, current_date), $6)
+         RETURNING id, kind, body, noted_on, created_at`,
+        [
+          claims.tid,
+          employeeId,
+          body.kind,
+          body.body!.trim(),
+          body.notedOn ?? null,
+          claims.sub,
+        ],
+      );
+      return res.rows[0];
+    });
+  }
+
+  @Get("trainings")
+  async listTrainings(@TenantClaims() claims: TenantTokenClaims) {
+    return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const res = await client.query(
+        `SELECT t.id, t.name, t.provider, t.scheduled_on, t.completed,
+                count(ta.id)::int AS attendee_count,
+                coalesce(
+                  array_agg(e.full_name ORDER BY e.full_name)
+                    FILTER (WHERE e.id IS NOT NULL),
+                  '{}') AS attendees
+         FROM trainings t
+         LEFT JOIN training_attendees ta ON ta.training_id = t.id
+         LEFT JOIN employees e ON e.id = ta.employee_id
+         GROUP BY t.id
+         ORDER BY t.completed, t.scheduled_on DESC
+         LIMIT 200`,
+      );
+      return res.rows;
+    });
+  }
+
+  @Post("trainings")
+  @Roles(...HR_ROLES)
+  async createTraining(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Body() body: { name?: string; provider?: string; scheduledOn?: string },
+  ) {
+    if (!body?.name?.trim()) throw new BadRequestException("name is required");
+    if (!DATE_RE.test(body?.scheduledOn ?? "")) {
+      throw new BadRequestException("scheduledOn must be YYYY-MM-DD");
+    }
+    return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const res = await client.query(
+        `INSERT INTO trainings (tenant_id, name, provider, scheduled_on, created_by)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, name, provider, scheduled_on, completed`,
+        [
+          claims.tid,
+          body.name!.trim(),
+          body.provider?.trim() ?? "",
+          body.scheduledOn,
+          claims.sub,
+        ],
+      );
+      return res.rows[0];
+    });
+  }
+
+  @Post("trainings/:id/attendees")
+  @Roles(...HR_ROLES)
+  async addAttendee(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) trainingId: string,
+    @Body() body: { employeeId?: string },
+  ) {
+    if (!body?.employeeId) {
+      throw new BadRequestException("employeeId is required");
+    }
+    return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const tr = await client.query("SELECT id FROM trainings WHERE id = $1", [
+        trainingId,
+      ]);
+      if (!tr.rows[0]) throw new BadRequestException("Training not found");
+      try {
+        const res = await client.query(
+          `INSERT INTO training_attendees (tenant_id, training_id, employee_id)
+           VALUES ($1, $2, $3) RETURNING id`,
+          [claims.tid, trainingId, body.employeeId],
+        );
+        return res.rows[0];
+      } catch (e) {
+        if ((e as { code?: string }).code === "23505") {
+          throw new BadRequestException("Already an attendee");
+        }
+        throw e;
+      }
+    });
+  }
+
+  @Post("trainings/:id/complete")
+  @HttpCode(200)
+  @Roles(...HR_ROLES)
+  async completeTraining(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) trainingId: string,
+  ) {
+    return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const res = await client.query(
+        `UPDATE trainings SET completed = true
+         WHERE id = $1 RETURNING id, completed`,
+        [trainingId],
+      );
+      if (!res.rows[0]) throw new BadRequestException("Training not found");
+      return res.rows[0];
+    });
+  }
+
+  /**
+   * Workforce analytics: headcount + gross payroll by department, average
+   * tenure in months (active employees with a hire date), attrition
+   * (inactive count), trainings in the next 60 days and salary changes in
+   * the last 90 days.
+   */
+  @Get("workforce-report")
+  async workforceReport(@TenantClaims() claims: TenantTokenClaims) {
+    return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const [departments, totals, upcoming, recentChanges] = await Promise.all([
+        client.query(
+          `SELECT coalesce(d.name, 'Unassigned') AS department,
+                  count(e.id)::int AS employees,
+                  coalesce(sum(e.gross_cents), 0)::bigint AS gross_cents
+           FROM employees e
+           LEFT JOIN departments d ON d.id = e.department_id
+           WHERE e.status = 'active'
+           GROUP BY 1 ORDER BY 2 DESC, 1`,
+        ),
+        client.query(
+          `SELECT count(*) FILTER (WHERE status = 'active')::int AS headcount,
+                  coalesce(sum(gross_cents) FILTER (WHERE status = 'active'), 0)::bigint
+                    AS gross_cents,
+                  count(*) FILTER (WHERE status = 'inactive')::int AS inactive,
+                  round(avg((current_date - hired_on) / 30.44)
+                        FILTER (WHERE status = 'active' AND hired_on IS NOT NULL), 1)
+                    AS avg_tenure_months
+           FROM employees`,
+        ),
+        client.query(
+          `SELECT id, name, provider, scheduled_on
+           FROM trainings
+           WHERE NOT completed
+             AND scheduled_on BETWEEN current_date
+                                  AND current_date + interval '60 days'
+           ORDER BY scheduled_on
+           LIMIT 50`,
+        ),
+        client.query(
+          `SELECT sh.id, e.full_name, sh.effective_date,
+                  sh.gross_cents::bigint AS gross_cents, sh.note
+           FROM employee_salary_history sh
+           JOIN employees e ON e.id = sh.employee_id
+           WHERE sh.effective_date >= current_date - interval '90 days'
+           ORDER BY sh.effective_date DESC, sh.created_at DESC
+           LIMIT 50`,
+        ),
+      ]);
+      const t = totals.rows[0];
+      return {
+        departments: departments.rows,
+        totals: {
+          headcount: t.headcount,
+          grossCents: Number(t.gross_cents),
+          inactive: t.inactive,
+          avgTenureMonths:
+            t.avg_tenure_months === null ? null : Number(t.avg_tenure_months),
+        },
+        upcomingTrainings: upcoming.rows,
+        recentSalaryChanges: recentChanges.rows,
+      };
     });
   }
 
