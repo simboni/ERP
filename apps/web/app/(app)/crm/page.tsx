@@ -60,6 +60,8 @@ export default function CrmPage() {
   const [cName, setCName] = useState("");
   const [cCompany, setCCompany] = useState("");
   const [cPhone, setCPhone] = useState("");
+  const [cEmail, setCEmail] = useState("");
+  const [editingContact, setEditingContact] = useState<string | null>(null);
   const [dContact, setDContact] = useState("");
   const [dTitle, setDTitle] = useState("");
   const [dValue, setDValue] = useState("");
@@ -265,7 +267,7 @@ export default function CrmPage() {
         <>
           <div className="card">
             <div className="card-head">
-              <h3>New contact</h3>
+              <h3>{editingContact ? "Edit contact" : "New contact"}</h3>
             </div>
             <div className="row">
               <div>
@@ -286,21 +288,67 @@ export default function CrmPage() {
                   onChange={(e) => setCPhone(e.target.value)}
                 />
               </div>
+              <div>
+                <label>Email</label>
+                <input
+                  value={cEmail}
+                  onChange={(e) => setCEmail(e.target.value)}
+                />
+              </div>
             </div>
             <button
+              disabled={!cName.trim()}
               onClick={() =>
-                void act(
-                  () =>
-                    api("/tenants/current/crm/contacts", {
+                void act(async () => {
+                  if (editingContact) {
+                    await api(
+                      `/tenants/current/crm/contacts/${editingContact}`,
+                      {
+                        method: "PATCH",
+                        body: {
+                          name: cName,
+                          company: cCompany || undefined,
+                          phone: cPhone || undefined,
+                          email: cEmail || undefined,
+                        },
+                      },
+                    );
+                  } else {
+                    await api("/tenants/current/crm/contacts", {
                       method: "POST",
-                      body: { name: cName, company: cCompany, phone: cPhone },
-                    }),
-                  "Contact added as lead.",
-                )
+                      body: {
+                        name: cName,
+                        company: cCompany,
+                        phone: cPhone,
+                        email: cEmail || undefined,
+                      },
+                    });
+                  }
+                  setCName("");
+                  setCCompany("");
+                  setCPhone("");
+                  setCEmail("");
+                  setEditingContact(null);
+                }, editingContact ? "Contact updated." : "Contact added as lead.")
               }
             >
-              Add lead
-            </button>
+              {editingContact ? "Save changes" : "Add lead"}
+            </button>{" "}
+            {editingContact && (
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => {
+                  setEditingContact(null);
+                  setCName("");
+                  setCCompany("");
+                  setCPhone("");
+                  setCEmail("");
+                }}
+              >
+                Cancel
+              </button>
+            )}
           </div>
           <div className="card">
             <DataTable
@@ -369,6 +417,21 @@ export default function CrmPage() {
                   value: () => "",
                   render: (c) => (
                     <span style={{ whiteSpace: "nowrap" }}>
+                      <button
+                        type="button"
+                        className="secondary"
+                        style={{ marginTop: 0, padding: "4px 12px", marginRight: 6 }}
+                        onClick={() => {
+                          setEditingContact(c.id);
+                          setCName(c.name);
+                          setCCompany(c.company ?? "");
+                          setCPhone(c.phone ?? "");
+                          setCEmail(c.email ?? "");
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                      >
+                        ✎ Edit
+                      </button>
                       {CONTACT_STAGES.indexOf(c.stage) < 2 && (
                         <button
                           type="button"

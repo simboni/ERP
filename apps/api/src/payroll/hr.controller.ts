@@ -132,16 +132,48 @@ export class HrController {
     @TenantClaims() claims: TenantTokenClaims,
     @Param("id", ParseUUIDPipe) employeeId: string,
     @Body()
-    body: { departmentId?: string | null; designation?: string | null },
+    body: {
+      departmentId?: string | null;
+      designation?: string | null;
+      fullName?: string;
+      msisdn?: string;
+      kraPin?: string;
+      grossCents?: number;
+      status?: "active" | "inactive";
+    },
   ) {
+    if (
+      body.grossCents !== undefined &&
+      (!Number.isInteger(body.grossCents) || body.grossCents <= 0)
+    ) {
+      throw new BadRequestException("grossCents must be a positive integer");
+    }
+    if (body.status && !["active", "inactive"].includes(body.status)) {
+      throw new BadRequestException("status must be active | inactive");
+    }
     return this.db.withTenant(claims.tid, claims.sub, async (client) => {
       const res = await client.query(
         `UPDATE employees
          SET department_id = coalesce($2, department_id),
-             designation   = coalesce($3, designation)
+             designation   = coalesce($3, designation),
+             full_name     = coalesce($4, full_name),
+             msisdn        = coalesce($5, msisdn),
+             kra_pin       = coalesce($6, kra_pin),
+             gross_cents   = coalesce($7, gross_cents),
+             status        = coalesce($8, status)
          WHERE id = $1
-         RETURNING id, full_name, department_id, designation`,
-        [employeeId, body.departmentId ?? null, body.designation ?? null],
+         RETURNING id, full_name, department_id, designation, msisdn,
+                   kra_pin, gross_cents, status`,
+        [
+          employeeId,
+          body.departmentId ?? null,
+          body.designation ?? null,
+          body.fullName?.trim() || null,
+          body.msisdn?.trim() || null,
+          body.kraPin?.trim() || null,
+          body.grossCents ?? null,
+          body.status ?? null,
+        ],
       );
       if (!res.rows[0]) throw new BadRequestException("Employee not found");
       return res.rows[0];

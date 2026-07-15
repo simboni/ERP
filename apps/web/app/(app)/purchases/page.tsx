@@ -42,7 +42,11 @@ export default function PurchasesPage() {
     ]);
     setSuppliers(s);
     setBillsList(b);
-    if (s[0] && !supplierId) setSupplierId(s[0].id);
+    // Supplier page's "New bill" action deep-links here as ?supplier=<id>.
+    const wanted = new URLSearchParams(window.location.search).get("supplier");
+    const preselect = wanted && s.find((x) => x.id === wanted);
+    if (preselect && !supplierId) setSupplierId(preselect.id);
+    else if (s[0] && !supplierId) setSupplierId(s[0].id);
   }, [supplierId]);
 
   useEffect(() => {

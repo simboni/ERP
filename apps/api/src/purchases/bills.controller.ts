@@ -3,8 +3,10 @@ import {
   Body,
   Controller,
   Get,
+  NotFoundException,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   UseGuards,
 } from "@nestjs/common";
@@ -50,6 +52,53 @@ export class BillsController {
         ],
       );
       return res.rows[0];
+    });
+  }
+
+  @Patch("suppliers/:id")
+  @Roles(...PURCHASE_ROLES)
+  async editSupplier(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) supplierId: string,
+    @Body()
+    body: { name?: string; kraPin?: string; phone?: string; email?: string },
+  ) {
+    return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const res = await client.query(
+        `UPDATE suppliers SET
+           name    = coalesce($2, name),
+           kra_pin = coalesce($3, kra_pin),
+           phone   = coalesce($4, phone),
+           email   = coalesce($5, email)
+         WHERE id = $1
+         RETURNING id, name, kra_pin, phone, email`,
+        [
+          supplierId,
+          body.name?.trim() || null,
+          body.kraPin?.trim() || null,
+          body.phone?.trim() || null,
+          body.email?.trim() || null,
+        ],
+      );
+      if (!res.rows[0]) throw new NotFoundException("Supplier not found");
+      return res.rows[0];
+    });
+  }
+
+  @Get("suppliers/:id/bills")
+  async supplierBills(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) supplierId: string,
+  ) {
+    return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const res = await client.query(
+        `SELECT id, status, bill_date, due_date, total_cents, vat_cents,
+                supplier_invoice_no
+         FROM bills WHERE supplier_id = $1
+         ORDER BY bill_date DESC LIMIT 500`,
+        [supplierId],
+      );
+      return res.rows;
     });
   }
 

@@ -4,8 +4,10 @@ import {
   Controller,
   Get,
   HttpCode,
+  NotFoundException,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   UseGuards,
 } from "@nestjs/common";
@@ -118,6 +120,44 @@ export class CrmController {
           claims.sub,
         ],
       );
+      return res.rows[0];
+    });
+  }
+
+  @Patch("contacts/:id")
+  @Roles(...CRM_ROLES)
+  async editContact(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) contactId: string,
+    @Body()
+    body: {
+      name?: string;
+      company?: string;
+      phone?: string;
+      email?: string;
+      source?: string;
+    },
+  ) {
+    return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const res = await client.query(
+        `UPDATE crm_contacts SET
+           name    = coalesce($2, name),
+           company = coalesce($3, company),
+           phone   = coalesce($4, phone),
+           email   = coalesce($5, email),
+           source  = coalesce($6, source)
+         WHERE id = $1
+         RETURNING id, name, company, phone, email, stage, source`,
+        [
+          contactId,
+          body.name?.trim() || null,
+          body.company?.trim() || null,
+          body.phone?.trim() || null,
+          body.email?.trim() || null,
+          body.source?.trim() || null,
+        ],
+      );
+      if (!res.rows[0]) throw new NotFoundException("Contact not found");
       return res.rows[0];
     });
   }

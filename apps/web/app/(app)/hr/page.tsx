@@ -105,6 +105,14 @@ export default function HrPage() {
   const [empPhone, setEmpPhone] = useState("");
   const [empDept, setEmpDept] = useState("");
   const [empTitle, setEmpTitle] = useState("");
+  const [editEmp, setEditEmp] = useState<Employee | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    phone: "",
+    title: "",
+    grossKes: "",
+    status: "active",
+  });
   const [deptName, setDeptName] = useState("");
   const [polName, setPolName] = useState("");
   const [polDays, setPolDays] = useState("21");
@@ -515,6 +523,94 @@ export default function HrPage() {
             </p>
           </div>
 
+          {editEmp && (
+            <div className="card">
+              <div className="card-head">
+                <h3>Edit — {editEmp.full_name}</h3>
+              </div>
+              <div className="row">
+                <div>
+                  <label>Full name</label>
+                  <input
+                    value={editForm.name}
+                    onChange={(e) =>
+                      setEditForm((f) => ({ ...f, name: e.target.value }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label>Phone (M-Pesa)</label>
+                  <input
+                    value={editForm.phone}
+                    onChange={(e) =>
+                      setEditForm((f) => ({ ...f, phone: e.target.value }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label>Designation</label>
+                  <input
+                    value={editForm.title}
+                    onChange={(e) =>
+                      setEditForm((f) => ({ ...f, title: e.target.value }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label>Gross salary (KES/month)</label>
+                  <input
+                    type="number"
+                    value={editForm.grossKes}
+                    onChange={(e) =>
+                      setEditForm((f) => ({ ...f, grossKes: e.target.value }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label>Status</label>
+                  <select
+                    value={editForm.status}
+                    onChange={(e) =>
+                      setEditForm((f) => ({ ...f, status: e.target.value }))
+                    }
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive (off payroll)</option>
+                  </select>
+                </div>
+              </div>
+              <button
+                disabled={!editForm.name.trim()}
+                onClick={() =>
+                  void act(async () => {
+                    await api(`/tenants/current/hr/employees/${editEmp.id}`, {
+                      method: "PATCH",
+                      body: {
+                        fullName: editForm.name,
+                        msisdn: editForm.phone || undefined,
+                        designation: editForm.title || undefined,
+                        grossCents: editForm.grossKes
+                          ? Math.round(Number(editForm.grossKes) * 100)
+                          : undefined,
+                        status: editForm.status,
+                      },
+                    });
+                    setEditEmp(null);
+                  }, "Employee updated.")
+                }
+              >
+                Save changes
+              </button>{" "}
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setEditEmp(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
           <div className="card">
             <div className="card-head">
               <h3>Team ({activeEmployees.length})</h3>
@@ -528,6 +624,7 @@ export default function HrPage() {
                     <th>Designation</th>
                     <th className="num">Gross</th>
                     <th>Hired</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -580,6 +677,26 @@ export default function HrPage() {
                       <td className="muted">{e.designation ?? "—"}</td>
                       <td className="num">{fmtKes0(e.gross_cents)}</td>
                       <td className="muted">{d10(e.hired_on) || "—"}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="secondary"
+                          style={{ marginTop: 0, padding: "4px 12px" }}
+                          onClick={() => {
+                            setEditEmp(e);
+                            setEditForm({
+                              name: e.full_name,
+                              phone: e.msisdn ?? "",
+                              title: e.designation ?? "",
+                              grossKes: String(Number(e.gross_cents) / 100),
+                              status: e.status,
+                            });
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                          }}
+                        >
+                          ✎ Edit
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

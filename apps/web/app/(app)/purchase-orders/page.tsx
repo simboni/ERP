@@ -81,6 +81,15 @@ export default function PurchaseOrdersPage() {
         setItems(i);
         setSuppliers(s);
         setLow(l);
+        // Supplier page's "Purchase order" action deep-links ?supplier=<id>:
+        // preselect them and open the New order tab directly.
+        const wanted = new URLSearchParams(window.location.search).get(
+          "supplier",
+        );
+        if (wanted && s.some((x) => x.id === wanted)) {
+          setSupplierId(wanted);
+          setTab("new");
+        }
       })
       .catch(fail);
   }, []);
