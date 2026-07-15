@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, fmtKes } from "@/lib/api";
+import { DataTable } from "@/components/DataTable";
 import { useI18n } from "@/lib/i18n";
 
 interface SupplierRow {
@@ -19,7 +20,6 @@ interface SupplierRow {
 export default function SuppliersPage() {
   const { t } = useI18n();
   const [rows, setRows] = useState<SupplierRow[]>([]);
-  const [q, setQ] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -30,58 +30,72 @@ export default function SuppliersPage() {
       );
   }, []);
 
-  const filtered = rows.filter(
-    (s) => !q || s.name.toLowerCase().includes(q.toLowerCase()),
-  );
-
   return (
     <>
       <h1>{t("navSuppliers")}</h1>
       {error && <div className="err">{error}</div>}
-      <input
-        placeholder={`${t("search")}…`}
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        style={{ maxWidth: 320 }}
-      />
       <div className="card">
-        {filtered.length === 0 ? (
-          <p className="muted">
-            No suppliers yet — they are created with your first bill on the
-            Purchases page.
-          </p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Supplier</th>
-                <th>Contact</th>
-                <th>Bills</th>
-                <th>Billed</th>
-                <th>Unpaid</th>
-                <th>Last bill</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((s) => (
-                <tr key={s.id}>
-                  <td>{s.name}</td>
-                  <td className="muted">{s.phone ?? s.email ?? "—"}</td>
-                  <td>{s.bill_count}</td>
-                  <td>{fmtKes(s.billed_cents)}</td>
-                  <td>
-                    {Number(s.unpaid_cents) > 0 ? (
-                      <strong>{fmtKes(s.unpaid_cents)}</strong>
-                    ) : (
-                      <span className="muted">—</span>
-                    )}
-                  </td>
-                  <td className="muted">{s.last_bill_date?.slice(0, 10) ?? "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <DataTable
+          rows={rows}
+          csvName="suppliers"
+          searchKeys={["name", "phone", "email"]}
+          pageSizeDefault={10}
+          empty={
+            <div className="empty">
+              <span className="empty-icon">🚚</span>
+              <p>
+                No suppliers yet — they are created with your first bill on
+                the Purchases page.
+              </p>
+            </div>
+          }
+          columns={[
+            { key: "name", label: "Supplier" },
+            {
+              key: "phone",
+              label: "Contact",
+              value: (s) => s.phone ?? s.email ?? "",
+              render: (s) => (
+                <span className="muted">{s.phone ?? s.email ?? "—"}</span>
+              ),
+            },
+            {
+              key: "bill_count",
+              label: "Bills",
+              num: true,
+              value: (s) => s.bill_count,
+            },
+            {
+              key: "billed_cents",
+              label: "Billed",
+              num: true,
+              value: (s) => Number(s.billed_cents),
+              render: (s) => fmtKes(s.billed_cents),
+            },
+            {
+              key: "unpaid_cents",
+              label: "Unpaid",
+              num: true,
+              value: (s) => Number(s.unpaid_cents),
+              render: (s) =>
+                Number(s.unpaid_cents) > 0 ? (
+                  <strong>{fmtKes(s.unpaid_cents)}</strong>
+                ) : (
+                  <span className="muted">—</span>
+                ),
+            },
+            {
+              key: "last_bill_date",
+              label: "Last bill",
+              value: (s) => s.last_bill_date?.slice(0, 10) ?? "",
+              render: (s) => (
+                <span className="muted">
+                  {s.last_bill_date?.slice(0, 10) ?? "—"}
+                </span>
+              ),
+            },
+          ]}
+        />
       </div>
     </>
   );

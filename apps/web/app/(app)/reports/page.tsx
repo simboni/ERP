@@ -289,7 +289,46 @@ export default function ReportsPage() {
               style={{ maxWidth: 220 }}
             />
             <br />
-            <button onClick={() => void loadBs(asOf)}>Run</button>
+            <button onClick={() => void loadBs(asOf)}>Run</button>{" "}
+            {bs && (
+              <button
+                className="secondary"
+                onClick={() =>
+                  downloadCsv(`balance-sheet-${bs.asOf}.csv`, [
+                    ["Section", "Account", "Amount KES"],
+                    ...bs.assets.map((r) => [
+                      "Assets",
+                      `${r.code} ${r.name}`,
+                      Number(r.amount_cents) / 100,
+                    ]),
+                    ["Assets", "Total assets", bs.totalAssetsCents / 100],
+                    ...bs.liabilities.map((r) => [
+                      "Liabilities",
+                      `${r.code} ${r.name}`,
+                      Number(r.amount_cents) / 100,
+                    ]),
+                    [
+                      "Liabilities",
+                      "Total liabilities",
+                      bs.totalLiabilitiesCents / 100,
+                    ],
+                    ...bs.equity.map((r) => [
+                      "Equity",
+                      `${r.code} ${r.name}`,
+                      Number(r.amount_cents) / 100,
+                    ]),
+                    [
+                      "Equity",
+                      "Retained earnings",
+                      bs.retainedEarningsCents / 100,
+                    ],
+                    ["Equity", "Total equity", bs.totalEquityCents / 100],
+                  ])
+                }
+              >
+                Export CSV
+              </button>
+            )}
           </div>
           {bs && (
             <div className="card">
@@ -404,6 +443,25 @@ export default function ReportsPage() {
               Debit-positive balances. Click an account to see every journal
               entry behind it.
             </p>
+            {trial.length > 0 && (
+              <button
+                className="secondary"
+                style={{ marginTop: 0 }}
+                onClick={() =>
+                  downloadCsv(`trial-balance-${today()}.csv`, [
+                    ["Code", "Account", "Type", "Balance KES"],
+                    ...trial.map((r) => [
+                      r.code,
+                      r.name,
+                      r.type,
+                      r.balanceCents / 100,
+                    ]),
+                  ])
+                }
+              >
+                Export CSV
+              </button>
+            )}
             <table>
               <thead>
                 <tr>
@@ -467,7 +525,49 @@ export default function ReportsPage() {
             </div>
             <button onClick={() => void loadSales(period, groupBy)}>
               Run report
-            </button>
+            </button>{" "}
+            {sales && sales.rows.length > 0 && (
+              <button
+                className="secondary"
+                onClick={() =>
+                  downloadCsv(`sales-${sales.period}-${sales.groupBy}.csv`, [
+                    [
+                      sales.groupBy === "day"
+                        ? "Date"
+                        : sales.groupBy === "customer"
+                          ? "Customer"
+                          : "Item",
+                      sales.groupBy === "item" ? "Qty" : "Invoices",
+                      "Net KES",
+                      "VAT KES",
+                      ...(sales.groupBy === "customer"
+                        ? ["Outstanding KES"]
+                        : []),
+                    ],
+                    ...sales.rows.map((r) => [
+                      String(r.label),
+                      sales.groupBy === "item"
+                        ? Number(r.quantity)
+                        : Number(r.invoices),
+                      Number(r.net_cents) / 100,
+                      Number(r.vat_cents) / 100,
+                      ...(sales.groupBy === "customer"
+                        ? [Number(r.outstanding_cents) / 100]
+                        : []),
+                    ]),
+                    [
+                      "Total",
+                      sales.totals.invoices,
+                      Number(sales.totals.net) / 100,
+                      Number(sales.totals.vat) / 100,
+                      ...(sales.groupBy === "customer" ? [""] : []),
+                    ],
+                  ])
+                }
+              >
+                Export CSV
+              </button>
+            )}
           </div>
           {sales && (
             <>

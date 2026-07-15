@@ -433,8 +433,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
 }
 .topbar-add-plus svg { width: 12px; height: 12px; }
 .avatar {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   background: var(--brand);
   color: var(--brand-ink);
@@ -444,6 +444,53 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
   font-size: 0.78rem;
   font-weight: 700;
 }
+button.avatar { margin: 0; padding: 0; border: 0; }
+button.avatar:hover { background: var(--brand-strong); }
+.topbar-account { position: relative; display: inline-flex; }
+.topbar-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  min-width: 210px;
+  background: var(--card);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(22, 24, 29, 0.18);
+  border: 1px solid var(--line-soft);
+  padding: 6px;
+  z-index: 40;
+}
+.topbar-menu-head {
+  padding: 9px 11px;
+  font-weight: 650;
+  font-size: 0.88rem;
+  border-bottom: 1px solid var(--line-soft);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.topbar-menu a,
+.topbar-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  margin: 0;
+  padding: 9px 11px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+.topbar-menu a:hover,
+.topbar-menu button:hover {
+  background: var(--neutral-soft);
+  text-decoration: none;
+}
+.topbar-menu svg { width: 15px; height: 15px; }
 .hamburger {
   display: none;
   margin: 0;
@@ -492,8 +539,24 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
 .tabs .tab.active { background: var(--card); color: var(--ink); box-shadow: var(--shadow-1); font-weight: 650; }
 
 /* ---- quick actions ---- */
-.quick-actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 14px 0 4px; }
+.quick-actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 14px 0 4px; align-items: center; }
 .quick-actions button { margin-top: 0; }
+
+/* Record-level actions (call, message, new invoice…) shown as pill chips. */
+.action-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 15px;
+  border-radius: 999px;
+  background: var(--card);
+  box-shadow: 0 2px 8px rgba(22, 24, 29, 0.08);
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.action-chip:hover { text-decoration: none; box-shadow: 0 3px 12px rgba(22, 24, 29, 0.14); }
+.action-chip.primary { background: var(--brand); color: var(--brand-ink); }
 
 /* ---- charts ---- */
 .swatch {
@@ -573,8 +636,13 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
   font-size: 0.83rem;
   font-weight: 500;
   border: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
 }
 .topbar-search:hover { background: var(--line-soft); color: var(--ink); }
+.topbar-search-icon { display: inline-flex; }
+.topbar-search-icon svg { width: 14px; height: 14px; }
 .topbar-search kbd {
   font-family: inherit;
   font-size: 0.7rem;
@@ -582,7 +650,6 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
   border: 1px solid var(--line);
   border-radius: 5px;
   padding: 1px 6px;
-  margin-left: 6px;
 }
 @media (max-width: 760px) { .topbar-search kbd { display: none; } }
 
@@ -742,7 +809,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
   .tabs::-webkit-scrollbar { display: none; }
   .tabs .tab { white-space: nowrap; flex-shrink: 0; }
 
-  /* topbar: tenant truncates, actions stay reachable */
+  /* topbar: icon-only actions so the business name keeps the space */
   .topbar { gap: 8px; }
   .topbar-tenant {
     overflow: hidden;
@@ -750,9 +817,30 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
     white-space: nowrap;
     min-width: 0;
     flex-shrink: 1;
+    font-size: 0.9rem;
   }
-  .topbar-add { padding: 7px 10px; }
-  .topbar-search { padding: 7px 10px; }
+  .topbar-search-label { display: none; }
+  .topbar-search {
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 50%;
+    color: var(--ink);
+    flex-shrink: 0;
+  }
+  .topbar-search-icon svg { width: 17px; height: 17px; }
+  .topbar-add-label { display: none; }
+  .topbar-add {
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+    flex-shrink: 0;
+  }
+  .topbar-add-plus { width: 34px; height: 34px; border-radius: 50%; }
+  .topbar-add-plus svg { width: 15px; height: 15px; }
+  .avatar { width: 34px; height: 34px; flex-shrink: 0; }
+  .topbar-menu { position: fixed; right: 12px; top: 58px; left: auto; }
 
   /* data tables: scroll inside the card, never the page */
   .table-wrap table { min-width: 560px; }

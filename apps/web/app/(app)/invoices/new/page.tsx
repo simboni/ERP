@@ -46,7 +46,12 @@ export default function NewInvoice() {
     setBranches(b);
     setCustomers(c);
     if (b[0]) setBranchId(b[0].id);
-    if (c[0]) setCustomerId(c[0].id);
+    // Deep links (e.g. the customer page's "New invoice" action) preselect
+    // the customer via ?customer=<id>.
+    const wanted = new URLSearchParams(window.location.search).get("customer");
+    const preselect = wanted && c.find((x) => x.id === wanted);
+    if (preselect) setCustomerId(preselect.id);
+    else if (c[0]) setCustomerId(c[0].id);
   }, []);
 
   useEffect(() => {

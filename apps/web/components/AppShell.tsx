@@ -98,6 +98,18 @@ export const Icons = {
       <path d="M12 5v14M5 12h14" />
     </svg>
   ),
+  search: (
+    <svg viewBox="0 0 24 24" {...stroke}>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="m16 16 5 5" />
+    </svg>
+  ),
+  signout: (
+    <svg viewBox="0 0 24 24" {...stroke}>
+      <path d="M14 4H6v16h8" />
+      <path d="M17 8.5 20.5 12 17 15.5M10 12h10.5" />
+    </svg>
+  ),
 };
 
 interface NavItem {
@@ -171,6 +183,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
   const [open, setOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -198,7 +211,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [router]);
 
-  useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => {
+    setOpen(false);
+    setMenuOpen(false);
+  }, [pathname]);
+
+  // Any click outside the account chip closes its menu.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = (): void => setMenuOpen(false);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, [menuOpen]);
 
   const signOut = (): void => {
     sessionStorage.removeItem("jenga.tenantName");
@@ -271,26 +295,46 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             className="topbar-search"
+            aria-label="Search"
             onClick={() => setPaletteOpen(true)}
           >
-            🔍 Search <kbd>Ctrl K</kbd>
+            <span className="topbar-search-icon">{Icons.search}</span>
+            <span className="topbar-search-label">Search</span>
+            <kbd>Ctrl K</kbd>
           </button>
-          <Link href="/invoices/new" className="topbar-add">
-            <span className="topbar-add-plus">{Icons.plus}</span>
-            {t("newInvoice").replace("+ ", "")}
-          </Link>
-          <span className="avatar" title={tenantName}>
-            {initials || "•"}
-          </span>
-          <a
-            href="#"
-            onClick={(e) => {
-              e.preventDefault();
-              signOut();
-            }}
+          <Link
+            href="/invoices/new"
+            className="topbar-add"
+            aria-label={t("newInvoice").replace("+ ", "")}
           >
-            {t("signOut")}
-          </a>
+            <span className="topbar-add-plus">{Icons.plus}</span>
+            <span className="topbar-add-label">
+              {t("newInvoice").replace("+ ", "")}
+            </span>
+          </Link>
+          <span className="topbar-account">
+            <button
+              type="button"
+              className="avatar"
+              title={tenantName}
+              aria-label="Account"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuOpen((v) => !v);
+              }}
+            >
+              {initials || "•"}
+            </button>
+            {menuOpen && (
+              <div className="topbar-menu" onClick={(e) => e.stopPropagation()}>
+                <div className="topbar-menu-head">{tenantName || "—"}</div>
+                <Link href="/settings">{t("navSettings")}</Link>
+                <button type="button" onClick={signOut}>
+                  {Icons.signout} {t("signOut")}
+                </button>
+              </div>
+            )}
+          </span>
         </header>
         <main>{children}</main>
       </div>
