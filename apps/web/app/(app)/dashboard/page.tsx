@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { api, fmtKes, getTenantToken } from "@/lib/api";
+import { api, fmtKes, fmtKes0, getTenantToken } from "@/lib/api";
 import { BarChart } from "@/components/BarChart";
+import { Icons } from "@/components/AppShell";
 import { useI18n } from "@/lib/i18n";
 
 interface TrialRow {
@@ -55,13 +56,18 @@ interface Summary {
   outOfStock: StockRow[];
 }
 
-const AGING_LABELS: [string, string][] = [
-  ["current", "Current"],
-  ["d1_30", "1–30 days"],
-  ["d31_60", "31–60"],
-  ["d61_90", "61–90"],
-  ["d90_plus", "90+"],
+const AGING: { key: string; label: string; color: string }[] = [
+  { key: "current", label: "Current", color: "var(--ok)" },
+  { key: "d1_30", label: "1–30 days", color: "var(--info)" },
+  { key: "d31_60", label: "31–60", color: "var(--warn)" },
+  { key: "d61_90", label: "61–90", color: "#c2334d" },
+  { key: "d90_plus", label: "90+", color: "var(--danger)" },
 ];
+
+const AVATAR_COLORS = ["#2b62c4", "#6d3fc0", "#0b6b38", "#c2334d", "#8a5a00"];
+
+const monthName = (ym: string): string =>
+  new Date(`${ym}-15`).toLocaleString("en", { month: "short" });
 
 export default function Dashboard() {
   const router = useRouter();
@@ -71,6 +77,7 @@ export default function Dashboard() {
   const [deadlines, setDeadlines] = useState<Deadline[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async (): Promise<void> => {
     try {
@@ -86,6 +93,8 @@ export default function Dashboard() {
       setSummary(sum);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -102,61 +111,72 @@ export default function Dashboard() {
   const cash = bal("1000") + bal("1010") + bal("1020");
   const receivable = bal("1100");
   const vatDue = -bal("2200");
-  const thisMonth = summary?.months[summary.months.length - 1];
-  const chartData = (summary?.months ?? []).map((m) => ({
-    label: m.month.slice(2),
+  const months = summary?.months ?? [];
+  const thisMonth = months[months.length - 1];
+  const prevMonth = months[months.length - 2];
+  const revNow = Number(thisMonth?.revenue_cents ?? 0);
+  const revPrev = Number(prevMonth?.revenue_cents ?? 0);
+  const revDelta =
+    revPrev > 0 ? Math.round(((revNow - revPrev) / revPrev) * 100) : null;
+  const chartData = months.map((m) => ({
+    label: monthName(m.month),
     a: Number(m.revenue_cents),
     b: Number(m.expense_cents),
   }));
-  const agingTotal = Object.values(summary?.arAging ?? {}).reduce(
-    (s, v) => s + v,
-    0,
-  );
+  const aging = summary?.arAging ?? {};
+  const agingTotal = Object.values(aging).reduce((s, v) => s + v, 0);
+
+  const tiles = [
+    { cls: "tile-4", icon: Icons.payment, value: fmtKes0(cash), label: t("cash") },
+    { cls: "tile-3", icon: Icons.invoice, value: fmtKes0(receivable), label: t("owed") },
+    {
+      cls: "tile-2",
+      icon: Icons.chart,
+      value: fmtKes0(revNow),
+      label: `Revenue · ${thisMonth ? monthName(thisMonth.month) : "…"}`,
+      delta: revDelta,
+    },
+    { cls: "tile-1", icon: Icons.shield, value: fmtKes0(vatDue), label: t("vatDue") },
+  ];
 
   return (
     <>
       <h1>{t("navDashboard")}</h1>
       {error && <div className="err">{error}</div>}
 
-      <div className="quick-actions">
-        <Link href="/invoices/new">
-          <button type="button">{t("newInvoice")}</button>
-        </Link>
-        <Link href="/quotes">
-          <button type="button" className="secondary">
-            {t("navQuotes")}
-          </button>
-        </Link>
-        <Link href="/purchases">
-          <button type="button" className="secondary">
-            {t("purchases")}
-          </button>
-        </Link>
-      </div>
-
-      <div className="row">
-        <div className="card">
-          <span className="muted">{t("cash")}</span>
-          <div className="stat">{fmtKes(cash)}</div>
+      {loading ? (
+        <div className="tiles">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="tile" style={{ background: "var(--card)" }}>
+              <span className="skel" style={{ width: "60%", height: 24 }} />
+              <span className="skel" style={{ width: "40%", marginTop: 10 }} />
+            </div>
+          ))}
         </div>
-        <div className="card">
-          <span className="muted">{t("owed")}</span>
-          <div className="stat">{fmtKes(receivable)}</div>
+      ) : (
+        <div className="tiles">
+          {tiles.map((tile) => (
+            <div key={tile.label} className={`tile ${tile.cls}`}>
+              <div className="tile-value">{tile.value}</div>
+              <div className="tile-label">
+                {tile.label}
+                {tile.delta !== null && tile.delta !== undefined && (
+                  <span className={`stat-delta ${tile.delta >= 0 ? "up" : "down"}`}>
+                    {tile.delta >= 0 ? "▲" : "▼"} {Math.abs(tile.delta)}%
+                  </span>
+                )}
+              </div>
+              <span className="tile-icon">{tile.icon}</span>
+            </div>
+          ))}
         </div>
-        <div className="card">
-          <span className="muted">Revenue ({thisMonth?.month ?? "…"})</span>
-          <div className="stat">
-            {thisMonth ? fmtKes(thisMonth.revenue_cents) : "…"}
-          </div>
-        </div>
-        <div className="card">
-          <span className="muted">{t("vatDue")}</span>
-          <div className="stat">{fmtKes(vatDue)}</div>
-        </div>
-      </div>
+      )}
 
       <div className="card">
-        <span className="muted">Revenue vs expenses — last 6 months</span>
+        <div className="card-head">
+          <h3>Revenue vs expenses</h3>
+          <a href="/reports">Reports →</a>
+        </div>
         {chartData.length > 0 ? (
           <BarChart
             data={chartData}
@@ -165,65 +185,116 @@ export default function Dashboard() {
             format={(v) => fmtKes(v)}
           />
         ) : (
-          <p className="muted">Loading…</p>
+          <span className="skel" style={{ height: 180 }} />
         )}
       </div>
 
       <div className="row">
         <div className="card">
-          <span className="muted">Receivables aging</span>
+          <div className="card-head">
+            <h3>Receivables aging</h3>
+            <a href="/invoices">{t("invoices")} →</a>
+          </div>
           {agingTotal === 0 ? (
-            <p className="muted">Nothing outstanding — great.</p>
+            <div className="empty">
+              <span className="empty-icon">🎉</span>
+              <p>Nothing outstanding.</p>
+            </div>
           ) : (
-            <table>
-              <tbody>
-                {AGING_LABELS.map(([key, label]) => {
-                  const v = summary?.arAging[key] ?? 0;
-                  return (
-                    <tr key={key}>
-                      <td>{label}</td>
-                      <td style={{ textAlign: "right" }}>
-                        {v > 0 ? fmtKes(v) : <span className="muted">—</span>}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            AGING.map(({ key, label, color }) => {
+              const v = aging[key] ?? 0;
+              return (
+                <div key={key} className="bar-row">
+                  <span className="bar-label">{label}</span>
+                  <span className="bar-track">
+                    <span
+                      className="bar-fill"
+                      style={{
+                        width: `${Math.max(v > 0 ? 3 : 0, (v / agingTotal) * 100)}%`,
+                        background: color,
+                      }}
+                    />
+                  </span>
+                  <span className="bar-amt">
+                    {v > 0 ? fmtKes(v) : <span className="muted">—</span>}
+                  </span>
+                </div>
+              );
+            })
           )}
         </div>
+
         <div className="card">
-          <span className="muted">Overdue invoices</span>
+          <div className="card-head">
+            <h3>Overdue invoices</h3>
+          </div>
           {(summary?.overdueInvoices ?? []).length === 0 ? (
-            <p className="muted">None overdue.</p>
+            <div className="empty">
+              <span className="empty-icon">✅</span>
+              <p>None overdue.</p>
+            </div>
           ) : (
-            <table>
-              <tbody>
-                {summary!.overdueInvoices.map((o) => (
-                  <tr key={o.id}>
-                    <td>
-                      <Link href={`/invoices/view?id=${o.id}`}>
-                        {o.invoice_no ?? "draft"}
-                      </Link>
-                      <br />
-                      <span className="muted">{o.customer_name}</span>
-                    </td>
-                    <td style={{ textAlign: "right" }}>
-                      {fmtKes(o.outstanding_cents)}
-                      <br />
-                      <span className="err">{o.days_overdue}d late</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            summary!.overdueInvoices.map((o, i) => (
+              <div
+                key={o.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "8px 0",
+                  borderBottom:
+                    i === summary!.overdueInvoices.length - 1
+                      ? "none"
+                      : "1px solid var(--line-soft)",
+                }}
+              >
+                <span
+                  className="dot-avatar"
+                  style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}
+                >
+                  {o.customer_name
+                    .split(/\s+/)
+                    .slice(0, 2)
+                    .map((w) => w[0])
+                    .join("")
+                    .toUpperCase()}
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <Link href={`/invoices/view?id=${o.id}`}>
+                    #{o.invoice_no ?? "draft"}
+                  </Link>
+                  <br />
+                  <span
+                    className="muted"
+                    style={{
+                      display: "block",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {o.customer_name}
+                  </span>
+                </span>
+                <span style={{ textAlign: "right" }}>
+                  <span className="kes" style={{ fontWeight: 650 }}>
+                    {fmtKes(o.outstanding_cents)}
+                  </span>
+                  <br />
+                  <span className="pill overdue">{o.days_overdue}d late</span>
+                </span>
+              </div>
+            ))
           )}
         </div>
       </div>
 
       {(summary?.outOfStock ?? []).length > 0 && (
         <div className="card">
-          <span className="muted">Out of stock</span>
+          <div className="card-head">
+            <h3>Out of stock</h3>
+            <a href="/inventory">{t("navInventory")} →</a>
+          </div>
           <table>
             <tbody>
               {summary!.outOfStock.map((s) => (
@@ -231,7 +302,7 @@ export default function Dashboard() {
                   <td>
                     {s.name} <span className="muted">({s.sku})</span>
                   </td>
-                  <td style={{ textAlign: "right" }}>{Number(s.qty)}</td>
+                  <td className="num">{Number(s.qty)}</td>
                 </tr>
               ))}
             </tbody>
@@ -241,34 +312,44 @@ export default function Dashboard() {
 
       {deadlines.length > 0 && (
         <div className="card">
-          <span className="muted">{t("deadlines")}</span>
+          <div className="card-head">
+            <h3>{t("deadlines")}</h3>
+            <a href="/vat">{t("vat")} →</a>
+          </div>
           {deadlines.slice(0, 3).map((d) => (
-            <div key={d.key}>
-              {d.label} — <strong>{d.dueDate}</strong>{" "}
-              <span className={d.daysRemaining <= 5 ? "err" : "muted"}>
-                ({d.overdue ? t("overdue") : `${d.daysRemaining} ${t("days")}`})
+            <div key={d.key} className="bar-row">
+              <span style={{ flex: 1 }}>{d.label}</span>
+              <strong className="kes">{d.dueDate}</strong>
+              <span
+                className={`pill ${d.overdue ? "overdue" : d.daysRemaining <= 5 ? "pending" : "sent"}`}
+              >
+                {d.overdue ? t("overdue") : `${d.daysRemaining} ${t("days")}`}
               </span>
             </div>
           ))}
         </div>
       )}
 
-      <h2>
-        Recent {t("invoices").toLowerCase()}{" "}
-        <Link href="/invoices" style={{ fontSize: "0.9rem" }}>
-          view all
-        </Link>
-      </h2>
       <div className="card">
+        <div className="card-head">
+          <h3>Recent {t("invoices").toLowerCase()}</h3>
+          <Link href="/invoices">View all →</Link>
+        </div>
         {invoices.length === 0 ? (
-          <p className="muted">{t("noInvoices")}</p>
+          <div className="empty">
+            <span className="empty-icon">🧾</span>
+            <p>{t("noInvoices")}</p>
+            <Link href="/invoices/new">
+              <button type="button">{t("newInvoice")}</button>
+            </Link>
+          </div>
         ) : (
           <table>
             <thead>
               <tr>
                 <th>No.</th>
                 <th>{t("customer")}</th>
-                <th>{t("total")}</th>
+                <th className="num">{t("total")}</th>
                 <th>{t("status")}</th>
                 <th>eTIMS</th>
               </tr>
@@ -282,7 +363,7 @@ export default function Dashboard() {
                     </Link>
                   </td>
                   <td>{i.customer_name}</td>
-                  <td>{fmtKes(i.total_cents)}</td>
+                  <td className="num">{fmtKes(i.total_cents)}</td>
                   <td>
                     <span className={`pill ${i.status}`}>{i.status}</span>
                   </td>

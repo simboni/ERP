@@ -167,3 +167,9 @@ export function fmtKes(cents: number | string): string {
   const n = Number(cents) / 100;
   return `KES ${n.toLocaleString("en-KE", { minimumFractionDigits: 2 })}`;
 }
+
+/** Whole-shilling format for KPI tiles and axis labels. */
+export function fmtKes0(cents: number | string): string {
+  const n = Math.round(Number(cents) / 100);
+  return `KES ${n.toLocaleString("en-KE")}`;
+}
