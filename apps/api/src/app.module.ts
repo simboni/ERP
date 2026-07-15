@@ -52,6 +52,7 @@ import { ProjectsService } from "./projects/projects.service";
 import { PurchaseOrdersController } from "./purchases/purchase-orders.controller";
 import { PurchaseOrdersService } from "./purchases/purchase-orders.service";
 import { ReportsController } from "./ledger/reports.controller";
+import { ReportsExtraController } from "./ledger/reports-extra.controller";
 import { HrController } from "./payroll/hr.controller";
 import { DashboardController } from "./tenants/dashboard.controller";
 import { DemoDataController } from "./tenants/demo-data.controller";
@@ -74,6 +75,7 @@ import { TenantsController } from "./tenants/tenants.controller";
     SettingsController,
     DashboardController,
     ReportsController,
+    ReportsExtraController,
     FinanceController,
     DemoDataController,
     HrController,
