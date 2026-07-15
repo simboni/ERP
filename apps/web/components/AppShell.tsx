@@ -161,6 +161,7 @@ const NAV: NavSection[] = [
     items: [
       { href: "/vat", labelKey: "vat", icon: "shield" },
       { href: "/finance", labelKey: "navFinance", icon: "chart" },
+      { href: "/controls", labelKey: "navControls", icon: "shield" },
       { href: "/reports", labelKey: "navReports", icon: "chart" },
     ],
   },

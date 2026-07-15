@@ -5,6 +5,7 @@
 import { randomUUID } from "node:crypto";
 import { DbService } from "../src/db/db.service";
 import { AuditService } from "../src/audit/audit.service";
+import { ControlsService } from "../src/controls/controls.service";
 import { InventoryService } from "../src/inventory/inventory.service";
 import { LedgerService, seedDefaultAccounts } from "../src/ledger/ledger.service";
 import { SandboxPayoutProvider } from "../src/payments/payout.provider";
@@ -23,8 +24,17 @@ describe("purchase orders", () => {
   const ledger = new LedgerService();
   const audit = new AuditService();
   const inventory = new InventoryService();
-  const bills = new BillsService(ledger, audit, new SandboxPayoutProvider(), db);
-  const pos = new PurchaseOrdersService(inventory, bills, audit);
+  // No approval_policies rows exist in these fixtures, so the controls
+  // gate is a no-op here.
+  const controls = new ControlsService(db, audit);
+  const bills = new BillsService(
+    ledger,
+    audit,
+    new SandboxPayoutProvider(),
+    db,
+    controls,
+  );
+  const pos = new PurchaseOrdersService(inventory, bills, audit, controls);
 
   let tenant: string;
   let user: string;

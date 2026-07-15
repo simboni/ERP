@@ -6,6 +6,7 @@ import {
 } from "@nestjs/common";
 import type { PoolClient } from "pg";
 import { AuditService } from "../audit/audit.service";
+import { ControlsService } from "../controls/controls.service";
 import { DbService } from "../db/db.service";
 import { InvoiceLineInput } from "../invoicing/invoices.service";
 import { LedgerService } from "../ledger/ledger.service";
@@ -37,6 +38,7 @@ export class BillsService {
     private readonly audit: AuditService,
     @Inject(PAYOUT_PROVIDER) private readonly payout: PayoutProvider,
     private readonly db: DbService,
+    private readonly controls: ControlsService,
   ) {}
 
   /**
@@ -81,6 +83,16 @@ export class BillsService {
         `Only approved bills can be paid (status: ${bill.status})`,
       );
     }
+
+    // Approval-threshold gate (business controls): blocks BEFORE any money
+    // moves. Files a pending request and throws 403 when sign-off is due.
+    await this.controls.enforce({
+      tenantId: args.tenantId,
+      userId: args.userId,
+      docType: "bill_payment",
+      docId: args.billId,
+      amountCents: Number(bill.total_cents),
+    });
 
     // Phase 2: external payout for the M-Pesa rail.
     let providerRef: string | null = null;

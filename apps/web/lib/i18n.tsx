@@ -58,6 +58,7 @@ const DICT = {
     navPos: "Sell (POS)",
     navPurchaseOrders: "Purchase orders",
     navFinance: "Finance",
+    navControls: "Controls",
   },
   sw: {
     tagline: "Ankara za eTIMS · Ulinganisho wa M-Pesa · Hesabu safi",
@@ -108,6 +109,7 @@ const DICT = {
     navPos: "Uza (POS)",
     navPurchaseOrders: "Oda za manunuzi",
     navFinance: "Fedha",
+    navControls: "Udhibiti",
   },
 } as const;
 

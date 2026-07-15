@@ -8,6 +8,7 @@ import { DbService } from "../src/db/db.service";
 import { AuditService } from "../src/audit/audit.service";
 import { LedgerService, seedDefaultAccounts } from "../src/ledger/ledger.service";
 import { BillsService } from "../src/purchases/bills.service";
+import { ControlsService } from "../src/controls/controls.service";
 import { SandboxPayoutProvider } from "../src/payments/payout.provider";
 import { ComplianceService } from "../src/compliance/compliance.service";
 
@@ -19,7 +20,15 @@ describe("purchases + input VAT", () => {
   const db = new DbService();
   const ledger = new LedgerService();
   const audit = new AuditService();
-  const bills = new BillsService(ledger, audit, new SandboxPayoutProvider(), db);
+  // No approval_policies rows exist in these fixtures, so the controls
+  // gate is a no-op here.
+  const bills = new BillsService(
+    ledger,
+    audit,
+    new SandboxPayoutProvider(),
+    db,
+    new ControlsService(db, audit),
+  );
   const compliance = new ComplianceService();
 
   let tenant: string;

@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type { PoolClient } from "pg";
 import { AuditService } from "../audit/audit.service";
+import { ControlsService } from "../controls/controls.service";
 import { InventoryService } from "../inventory/inventory.service";
 import { mulRate } from "../payroll/calculator";
 import { BillsService } from "./bills.service";
@@ -25,6 +26,7 @@ export class PurchaseOrdersService {
     private readonly inventory: InventoryService,
     private readonly bills: BillsService,
     private readonly audit: AuditService,
+    private readonly controls: ControlsService,
   ) {}
 
   async createDraft(
@@ -126,13 +128,23 @@ export class PurchaseOrdersService {
     args: { tenantId: string; userId: string; poId: string },
   ): Promise<{ status: string }> {
     const res = await client.query(
-      "SELECT status FROM purchase_orders WHERE id = $1 FOR UPDATE",
+      "SELECT status, total_cents FROM purchase_orders WHERE id = $1 FOR UPDATE",
       [args.poId],
     );
     if (!res.rows[0]) throw new NotFoundException("Purchase order not found");
     if (res.rows[0].status !== "draft") {
       throw new BadRequestException("Only draft POs can be sent");
     }
+    // Approval-threshold gate (business controls). Runs in its own
+    // transaction so the pending request survives the 403 that aborts
+    // this send.
+    await this.controls.enforce({
+      tenantId: args.tenantId,
+      userId: args.userId,
+      docType: "purchase_order",
+      docId: args.poId,
+      amountCents: Number(res.rows[0].total_cents),
+    });
     await client.query(
       "UPDATE purchase_orders SET status = 'sent' WHERE id = $1",
       [args.poId],
