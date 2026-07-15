@@ -19,8 +19,10 @@ RUN cd apps/api && ./node_modules/.bin/tsc \
       ../../db/migrate.ts ../../db/bootstrap-and-migrate.ts \
       --outDir /repo/db-dist --module commonjs --target es2022 \
       --esModuleInterop --skipLibCheck
-# Prune to production dependencies only.
-RUN pnpm --filter @jenga/api... deploy --legacy --prod /out
+# Prune to production dependencies only. NOTE: pnpm deploy takes exactly
+# one project (its workspace deps are bundled automatically) — a `...`
+# suffix here selects two projects and fails with CANNOT_DEPLOY_MANY.
+RUN pnpm --filter @jenga/api deploy --legacy --prod /out
 
 FROM node:22-alpine
 ENV NODE_ENV=production
