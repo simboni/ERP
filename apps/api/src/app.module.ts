@@ -57,6 +57,7 @@ import { DashboardController } from "./tenants/dashboard.controller";
 import { DemoDataController } from "./tenants/demo-data.controller";
 import { DocumentsController } from "./tenants/documents.controller";
 import { SearchController } from "./tenants/search.controller";
+import { SettingsController } from "./tenants/settings.controller";
 import { TenantsController } from "./tenants/tenants.controller";
 
 @Module({
@@ -70,6 +71,7 @@ import { TenantsController } from "./tenants/tenants.controller";
   controllers: [
     AuthController,
     TenantsController,
+    SettingsController,
     DashboardController,
     ReportsController,
     FinanceController,

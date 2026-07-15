@@ -3,6 +3,10 @@ import {
   Body,
   Controller,
   Get,
+  NotFoundException,
+  Param,
+  ParseUUIDPipe,
+  Patch,
   Post,
   UseGuards,
 } from "@nestjs/common";
@@ -31,16 +35,39 @@ export class FiscalController {
   @Roles("owner", "admin")
   async createBranch(
     @TenantClaims() claims: TenantTokenClaims,
-    @Body() body: { code?: string; name?: string },
+    @Body()
+    body: {
+      code?: string;
+      name?: string;
+      phone?: string;
+      address?: string;
+      isDefault?: boolean;
+    },
   ) {
     if (!body?.code?.trim() || !body?.name?.trim()) {
       throw new BadRequestException("code and name are required");
     }
+    const isDefault = body.isDefault === true;
     return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      // At most one default branch per tenant (enforced by a partial unique
+      // index); clear the incumbent before promoting a new one.
+      if (isDefault) {
+        await client.query(
+          "UPDATE branches SET is_default = false WHERE is_default",
+        );
+      }
       const res = await client.query(
-        `INSERT INTO branches (tenant_id, code, name)
-         VALUES ($1, $2, $3) RETURNING id, code, name, created_at`,
-        [claims.tid, body.code!.trim(), body.name!.trim()],
+        `INSERT INTO branches (tenant_id, code, name, phone, address, is_default)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id, code, name, phone, address, is_default, active, created_at`,
+        [
+          claims.tid,
+          body.code!.trim(),
+          body.name!.trim(),
+          body.phone?.trim() || null,
+          body.address?.trim() || null,
+          isDefault,
+        ],
       );
       await this.audit.record(client, {
         tenantId: claims.tid,
@@ -54,11 +81,88 @@ export class FiscalController {
     });
   }
 
+  @Patch("branches/:id")
+  @Roles("owner", "admin")
+  async updateBranch(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body()
+    body: {
+      code?: string;
+      name?: string;
+      phone?: string;
+      address?: string;
+      isDefault?: boolean;
+      active?: boolean;
+    },
+  ) {
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    let i = 1;
+    const addText = (col: string, val: unknown, required = false): void => {
+      if (val === undefined) return;
+      if (val !== null && typeof val !== "string") {
+        throw new BadRequestException(`${col} must be text`);
+      }
+      const trimmed = val === null ? null : (val as string).trim();
+      if (required && !trimmed) {
+        throw new BadRequestException(`${col} cannot be blank`);
+      }
+      sets.push(`${col} = $${i++}`);
+      params.push(trimmed === "" ? null : trimmed);
+    };
+    addText("code", body.code, true);
+    addText("name", body.name, true);
+    addText("phone", body.phone);
+    addText("address", body.address);
+    if (body.active !== undefined) {
+      if (typeof body.active !== "boolean") {
+        throw new BadRequestException("active must be a boolean");
+      }
+      sets.push(`active = $${i++}`);
+      params.push(body.active);
+    }
+    if (sets.length === 0 && body.isDefault === undefined) {
+      throw new BadRequestException("No editable fields provided");
+    }
+    return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      if (body.isDefault === true) {
+        await client.query(
+          "UPDATE branches SET is_default = false WHERE is_default AND id <> $1",
+          [id],
+        );
+        sets.push(`is_default = $${i++}`);
+        params.push(true);
+      } else if (body.isDefault === false) {
+        sets.push(`is_default = $${i++}`);
+        params.push(false);
+      }
+      params.push(id);
+      const res = await client.query(
+        `UPDATE branches SET ${sets.join(", ")}
+         WHERE id = $${i}
+         RETURNING id, code, name, phone, address, is_default, active, created_at`,
+        params,
+      );
+      if (!res.rows[0]) throw new NotFoundException("Branch not found");
+      await this.audit.record(client, {
+        tenantId: claims.tid,
+        actorUserId: claims.sub,
+        action: "branch.updated",
+        entityType: "branch",
+        entityId: id,
+        payload: { fields: sets.map((s) => s.split(" = ")[0]) },
+      });
+      return res.rows[0];
+    });
+  }
+
   @Get("branches")
   async listBranches(@TenantClaims() claims: TenantTokenClaims) {
     return this.db.withTenant(claims.tid, claims.sub, async (client) => {
       const res = await client.query(
-        "SELECT id, code, name, created_at FROM branches ORDER BY created_at",
+        `SELECT id, code, name, phone, address, is_default, active, created_at
+         FROM branches ORDER BY is_default DESC, created_at`,
       );
       return res.rows;
     });
