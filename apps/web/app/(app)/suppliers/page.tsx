@@ -225,7 +225,7 @@ export default function SuppliersPage() {
             ＋ New bill
           </Link>
           <Link
-            href={`/purchase-orders?supplier=${selected.id}`}
+            href={`/purchases?tab=newpo&supplier=${selected.id}`}
             className="action-chip"
           >
             ＋ Purchase order

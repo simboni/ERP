@@ -104,6 +104,42 @@ export const Icons = {
       <path d="m16 16 5 5" />
     </svg>
   ),
+  till: (
+    <svg viewBox="0 0 24 24" {...stroke}>
+      <path d="M4 10h16l-1.5 10h-13z" />
+      <path d="M8 10V7a4 4 0 0 1 8 0v3M9.5 14h5" />
+    </svg>
+  ),
+  funnel: (
+    <svg viewBox="0 0 24 24" {...stroke}>
+      <path d="M3 4h18l-7 8.5V20l-4-2v-5.5z" />
+    </svg>
+  ),
+  coins: (
+    <svg viewBox="0 0 24 24" {...stroke}>
+      <ellipse cx="12" cy="6" rx="7" ry="3" />
+      <path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6" />
+      <path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" />
+    </svg>
+  ),
+  folder: (
+    <svg viewBox="0 0 24 24" {...stroke}>
+      <path d="M3 6a2 2 0 0 1 2-2h4l2.5 2.5H19a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    </svg>
+  ),
+  briefcase: (
+    <svg viewBox="0 0 24 24" {...stroke}>
+      <rect x="3" y="8" width="18" height="12" rx="2" />
+      <path d="M9 8V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13.5h18" />
+    </svg>
+  ),
+  scale: (
+    <svg viewBox="0 0 24 24" {...stroke}>
+      <path d="M12 4v16M7 20h10" />
+      <path d="M12 6 5 8m7-2 7 2" />
+      <path d="M2.5 14a2.7 2.7 0 0 0 5 0L5 8zM16.5 14a2.7 2.7 0 0 0 5 0L19 8z" />
+    </svg>
+  ),
   signout: (
     <svg viewBox="0 0 24 24" {...stroke}>
       <path d="M14 4H6v16h8" />
@@ -130,23 +166,22 @@ const NAV: NavSection[] = [
   {
     titleKey: "navSales",
     items: [
-      { href: "/pos", labelKey: "navPos", icon: "payment" },
+      { href: "/pos", labelKey: "navPos", icon: "till" },
       { href: "/quotes", labelKey: "navQuotes", icon: "quote" },
       { href: "/invoices", labelKey: "invoices", icon: "invoice" },
       { href: "/payments", labelKey: "payments", icon: "payment" },
       { href: "/customers", labelKey: "navCustomers", icon: "people" },
-      { href: "/crm", labelKey: "navCrm", icon: "chart" },
+      { href: "/crm", labelKey: "navCrm", icon: "funnel" },
     ],
   },
   {
     titleKey: "navOperations",
     items: [
-      { href: "/purchases", labelKey: "purchases", icon: "cart" },
-      { href: "/purchase-orders", labelKey: "navPurchaseOrders", icon: "box" },
+      { href: "/purchases", labelKey: "navPurchasing", icon: "cart" },
       { href: "/suppliers", labelKey: "navSuppliers", icon: "truck" },
       { href: "/inventory", labelKey: "navInventory", icon: "box" },
-      { href: "/documents", labelKey: "navDocuments", icon: "quote" },
-      { href: "/projects", labelKey: "navProjects", icon: "box" },
+      { href: "/projects", labelKey: "navProjects", icon: "briefcase" },
+      { href: "/documents", labelKey: "navDocuments", icon: "folder" },
     ],
   },
   {
@@ -159,10 +194,10 @@ const NAV: NavSection[] = [
   {
     titleKey: "navCompliance",
     items: [
-      { href: "/vat", labelKey: "vat", icon: "shield" },
-      { href: "/finance", labelKey: "navFinance", icon: "chart" },
-      { href: "/controls", labelKey: "navControls", icon: "shield" },
+      { href: "/finance", labelKey: "navFinance", icon: "coins" },
       { href: "/reports", labelKey: "navReports", icon: "chart" },
+      { href: "/vat", labelKey: "vat", icon: "shield" },
+      { href: "/controls", labelKey: "navControls", icon: "scale" },
     ],
   },
   {
@@ -179,11 +214,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { t } = useI18n();
-  const [tenantName, setTenantName] = useState<string>(() =>
-    typeof window === "undefined"
-      ? ""
-      : (sessionStorage.getItem("jenga.tenantName") ?? ""),
-  );
+  // Starts empty on server AND first client render (hydration must match
+  // the exported HTML); the stored name is applied in an effect below.
+  const [tenantName, setTenantName] = useState<string>("");
   const [open, setOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -204,7 +237,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       router.replace("/");
       return;
     }
-    if (!sessionStorage.getItem("jenga.tenantName")) {
+    const stored = sessionStorage.getItem("jenga.tenantName");
+    if (stored) {
+      setTenantName(stored);
+    } else {
       api<{ name: string }>("/tenants/current")
         .then((tn) => {
           sessionStorage.setItem("jenga.tenantName", tn.name);
