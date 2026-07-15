@@ -392,4 +392,209 @@ export class DemoDataController {
 
     return { seeded: true, counts };
   }
+
+  /**
+   * HR + CRM sample data for a workspace that already has employees
+   * (e.g. one seeded before those modules existed). Guarded the same way:
+   * refuses if departments already exist.
+   */
+  @Post("hr-crm")
+  @HttpCode(200)
+  @Roles("owner", "admin")
+  async seedHrCrm(@TenantClaims() claims: TenantTokenClaims) {
+    const rnd = mulberry32(7);
+    const pick = <T>(arr: T[]): T => arr[Math.floor(rnd() * arr.length)];
+    const int = (min: number, max: number): number =>
+      min + Math.floor(rnd() * (max - min + 1));
+    const iso = (offsetDays: number): string =>
+      new Date(Date.now() + offsetDays * 86400000).toISOString().slice(0, 10);
+
+    return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const guard = await client.query(
+        "SELECT count(*)::int AS n FROM departments",
+      );
+      if (guard.rows[0].n >= 3) {
+        throw new BadRequestException(
+          "HR/CRM demo data appears to be loaded already.",
+        );
+      }
+
+      // Departments + assignments + designations.
+      const DEPTS = ["Sales", "Operations", "Finance", "Logistics", "Administration"];
+      const TITLES = ["Manager", "Supervisor", "Officer", "Assistant", "Clerk"];
+      const deptIds: string[] = [];
+      for (const name of DEPTS) {
+        const r = await client.query(
+          `INSERT INTO departments (tenant_id, name) VALUES ($1, $2)
+           ON CONFLICT (tenant_id, name) DO UPDATE SET name = EXCLUDED.name
+           RETURNING id`,
+          [claims.tid, name],
+        );
+        deptIds.push(r.rows[0].id);
+      }
+      const emps = await client.query(
+        "SELECT id FROM employees WHERE status = 'active' ORDER BY created_at",
+      );
+      for (let i = 0; i < emps.rows.length; i++) {
+        await client.query(
+          `UPDATE employees SET department_id = $2, designation = $3,
+                                hired_on = $4
+           WHERE id = $1`,
+          [
+            emps.rows[i].id,
+            deptIds[i % deptIds.length],
+            TITLES[i % TITLES.length],
+            iso(-int(60, 900)),
+          ],
+        );
+      }
+
+      // Leave policies + a believable mix of requests.
+      const policies: string[] = [];
+      for (const [name, days] of [
+        ["Annual leave", 21],
+        ["Sick leave", 14],
+        ["Maternity leave", 90],
+      ] as const) {
+        const r = await client.query(
+          `INSERT INTO leave_policies (tenant_id, name, days_per_year)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (tenant_id, name) DO UPDATE SET name = EXCLUDED.name
+           RETURNING id`,
+          [claims.tid, name, days],
+        );
+        policies.push(r.rows[0].id);
+      }
+      let leaveRequests = 0;
+      const mkLeave = async (
+        empIdx: number,
+        startOff: number,
+        len: number,
+        status: string,
+      ): Promise<void> => {
+        const emp = emps.rows[empIdx % emps.rows.length];
+        if (!emp) return;
+        await client.query(
+          `INSERT INTO leave_requests
+             (tenant_id, employee_id, policy_id, start_date, end_date, days,
+              reason, status, decided_by, decided_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
+                   CASE WHEN $8 = 'pending' THEN NULL ELSE $9::uuid END,
+                   CASE WHEN $8 = 'pending' THEN NULL ELSE now() END)`,
+          [
+            claims.tid,
+            emp.id,
+            pick(policies),
+            iso(startOff),
+            iso(startOff + len - 1),
+            Math.max(1, Math.round(len * 5 / 7)),
+            pick(["Family", "Travel upcountry", "Medical", "Personal", ""]),
+            status,
+            claims.sub,
+          ],
+        );
+        leaveRequests++;
+      };
+      await mkLeave(0, -2, 7, "approved"); // out right now
+      await mkLeave(1, 0, 3, "approved"); // out right now
+      await mkLeave(2, 7, 5, "pending");
+      await mkLeave(3, 14, 10, "pending");
+      await mkLeave(4, -40, 5, "approved");
+      await mkLeave(5, -20, 3, "rejected");
+
+      for (const [title, body] of [
+        ["Eid holiday", "Office closed on Friday for Eid — plan deliveries accordingly."],
+        ["New M-Pesa till", "We have moved to till 894321. Update your customers."],
+        ["Quarterly stock take", "Stock take on the 28th. Inventory freezes at 4pm."],
+      ]) {
+        await client.query(
+          `INSERT INTO announcements (tenant_id, title, body, created_by)
+           VALUES ($1, $2, $3, $4)`,
+          [claims.tid, title, body, claims.sub],
+        );
+      }
+
+      // CRM: contacts across stages, deals across the pipeline, follow-ups.
+      const COMPANIES = ["Tembo Hotels", "Simba Hardware", "Pwani Fresh", "Milele Schools", "Jua Kali Works", "Safari Tours KE", "Nyota Pharmacy", "Ushindi Sacco", "Green Farms", "Bora Electronics", "Malaika Salon", "Kilifi Builders"];
+      const PEOPLE = ["Alice Wambui", "Brian Otieno", "Cynthia Njoki", "Dennis Mwangi", "Eva Chebet", "Felix Omondi", "Grace Akinyi", "Hassan Ali", "Irene Wanjala", "James Kariuki", "Khadija Noor", "Luke Kiprono"];
+      const contactIds: string[] = [];
+      for (let i = 0; i < 12; i++) {
+        const stage = i < 5 ? "lead" : i < 9 ? "opportunity" : "customer";
+        const r = await client.query(
+          `INSERT INTO crm_contacts (tenant_id, name, company, phone, email,
+                                     stage, source, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+          [
+            claims.tid,
+            PEOPLE[i],
+            COMPANIES[i],
+            `+2547${int(10000000, 99999999)}`,
+            `${PEOPLE[i].split(" ")[0].toLowerCase()}@${COMPANIES[i].split(" ")[0].toLowerCase()}.co.ke`,
+            stage,
+            pick(["Referral", "Walk-in", "WhatsApp", "Exhibition", "Website"]),
+            claims.sub,
+          ],
+        );
+        contactIds.push(r.rows[0].id);
+      }
+      const DEAL_TITLES = ["Office supplies contract", "Quarterly restock", "Fit-out project", "Uniform order", "Annual maintenance", "Bulk cement supply", "POS rollout", "Catering supplies", "Solar installation", "Fleet servicing"];
+      const stages = ["new", "new", "qualified", "qualified", "proposal", "proposal", "won", "won", "lost", "new"];
+      let dealCount = 0;
+      for (let i = 0; i < 10; i++) {
+        await client.query(
+          `INSERT INTO deals (tenant_id, contact_id, title, value_cents,
+                              stage, expected_close, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            claims.tid,
+            contactIds[i % contactIds.length],
+            DEAL_TITLES[i],
+            int(30, 900) * 100000,
+            stages[i],
+            iso(int(5, 60)),
+            claims.sub,
+          ],
+        );
+        dealCount++;
+      }
+      let activityCount = 0;
+      for (let i = 0; i < 10; i++) {
+        await client.query(
+          `INSERT INTO crm_activities (tenant_id, contact_id, kind, body,
+                                       due_date, done, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            claims.tid,
+            contactIds[i],
+            pick(["call", "meeting", "task", "note"]),
+            pick([
+              "Called about pricing — send quote",
+              "Meeting at their office, bring samples",
+              "Follow up on delivery schedule",
+              "Asked for eTIMS invoice sample",
+              "Negotiating payment terms",
+            ]),
+            i < 6 ? iso(int(0, 7)) : null,
+            i >= 8,
+            claims.sub,
+          ],
+        );
+        activityCount++;
+      }
+
+      return {
+        seeded: true,
+        counts: {
+          departments: DEPTS.length,
+          employeesAssigned: emps.rows.length,
+          leavePolicies: 3,
+          leaveRequests,
+          announcements: 3,
+          crmContacts: contactIds.length,
+          deals: dealCount,
+          activities: activityCount,
+        },
+      };
+    });
+  }
 }

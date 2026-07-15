@@ -121,6 +121,7 @@ const NAV: NavSection[] = [
       { href: "/invoices", labelKey: "invoices", icon: "invoice" },
       { href: "/payments", labelKey: "payments", icon: "payment" },
       { href: "/customers", labelKey: "navCustomers", icon: "people" },
+      { href: "/crm", labelKey: "navCrm", icon: "chart" },
     ],
   },
   {

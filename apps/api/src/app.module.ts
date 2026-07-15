@@ -41,6 +41,7 @@ import { PayrollService } from "./payroll/payroll.service";
 import { BillsController } from "./purchases/bills.controller";
 import { BillsService } from "./purchases/bills.service";
 import { RulesService } from "./rules/rules.service";
+import { CrmController } from "./crm/crm.controller";
 import { ReportsController } from "./ledger/reports.controller";
 import { HrController } from "./payroll/hr.controller";
 import { DashboardController } from "./tenants/dashboard.controller";
@@ -62,6 +63,7 @@ import { TenantsController } from "./tenants/tenants.controller";
     ReportsController,
     DemoDataController,
     HrController,
+    CrmController,
     FiscalController,
     InvoicesController,
     SalesExtrasController,

@@ -52,6 +52,7 @@ const DICT = {
     navSuppliers: "Suppliers",
     navHr: "HR",
     navHrOverview: "HR & Leave",
+    navCrm: "CRM",
   },
   sw: {
     tagline: "Ankara za eTIMS · Ulinganisho wa M-Pesa · Hesabu safi",
@@ -96,6 +97,7 @@ const DICT = {
     navSuppliers: "Wasambazaji",
     navHr: "Watumishi",
     navHrOverview: "HR na Likizo",
+    navCrm: "CRM",
   },
 } as const;
 

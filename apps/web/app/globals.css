@@ -272,6 +272,8 @@ th {
   border-bottom: 1px solid var(--line);
 }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.table-wrap { overflow-x: auto; }
+.table-wrap table { min-width: 480px; }
 .kes { font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* ---- status pills ---- */
@@ -310,6 +312,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
 /* ---- layout helpers ---- */
 .row { display: flex; gap: 14px; flex-wrap: wrap; }
 .row > * { flex: 1; min-width: 190px; }
+.row > .card { min-width: 300px; }
 .stat {
   font-size: 1.45rem;
   font-weight: 700;
@@ -504,6 +507,45 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
 .meter { display: flex; height: 10px; border-radius: 999px; overflow: hidden; margin: 10px 0 4px; background: var(--neutral-soft); }
 .meter > span { display: block; height: 100%; }
 .meter > span + span { margin-left: 2px; }
+
+/* ---- CRM pipeline ---- */
+.pipeline {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+  overflow-x: auto;
+}
+.pipe-col {
+  background: var(--neutral-soft);
+  border-radius: var(--r-md);
+  padding: 10px;
+  min-height: 160px;
+}
+.pipe-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 2px 4px 8px;
+}
+.pipe-head .muted { font-weight: 550; font-size: 0.74rem; }
+.pipe-card {
+  background: var(--card);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-1);
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.85rem;
+}
+.pipe-card select { margin-top: 4px; padding: 4px 8px; font-size: 0.8rem; }
+@media (max-width: 900px) {
+  .pipeline { grid-template-columns: repeat(5, 180px); }
+}
 
 /* ---- empty states ---- */
 .empty {

@@ -80,6 +80,21 @@ export class HrController {
     });
   }
 
+  @Get("employees")
+  async listEmployees(@TenantClaims() claims: TenantTokenClaims) {
+    return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const res = await client.query(
+        `SELECT e.id, e.full_name, e.gross_cents, e.status, e.designation,
+                e.hired_on, e.msisdn, d.id AS department_id,
+                d.name AS department
+         FROM employees e
+         LEFT JOIN departments d ON d.id = e.department_id
+         ORDER BY e.full_name`,
+      );
+      return res.rows;
+    });
+  }
+
   @Get("departments")
   async listDepartments(@TenantClaims() claims: TenantTokenClaims) {
     return this.db.withTenant(claims.tid, claims.sub, async (client) => {
