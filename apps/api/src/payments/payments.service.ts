@@ -295,6 +295,88 @@ export class PaymentsService {
     return { paymentId };
   }
 
+  /**
+   * Record a payment received OUTSIDE the M-Pesa STK flow — cash handed
+   * over, a bank transfer/cheque, or an M-Pesa amount already in the till
+   * that the operator is reconciling by hand. Supports partial amounts, so
+   * an invoice can be settled in instalments across rails. Posts the
+   * matching journal entry and advances the invoice's paid total.
+   */
+  async recordManualPayment(
+    client: PoolClient,
+    args: {
+      tenantId: string;
+      userId: string;
+      invoiceId: string;
+      rail: "cash" | "bank" | "mpesa";
+      amountCents: number;
+      reference?: string;
+    },
+  ): Promise<{ paymentId: string; allocatedCents?: number }> {
+    if (!["cash", "bank", "mpesa"].includes(args.rail)) {
+      throw new BadRequestException("rail must be cash | bank | mpesa");
+    }
+    if (!Number.isInteger(args.amountCents) || args.amountCents <= 0) {
+      throw new BadRequestException("amountCents must be a positive integer");
+    }
+    const invRes = await client.query(
+      `SELECT invoice_no, total_cents, amount_paid_cents, status
+       FROM invoices WHERE id = $1 FOR UPDATE`,
+      [args.invoiceId],
+    );
+    const inv = invRes.rows[0];
+    if (!inv) throw new NotFoundException("Invoice not found");
+    if (inv.status !== "issued") {
+      throw new BadRequestException(
+        `Only issued invoices take payments (status: ${inv.status})`,
+      );
+    }
+    // The reconcile engine stores the M-Pesa rail as 'mpesa_c2b'/'stk';
+    // for a hand-keyed M-Pesa entry we use the plain 'mpesa' float rail.
+    const railStored = args.rail === "mpesa" ? "mpesa" : args.rail;
+    const ref =
+      args.reference?.trim() ||
+      `${args.rail.toUpperCase()}-${inv.invoice_no}`;
+    const res = await client.query(
+      `INSERT INTO payments
+         (tenant_id, rail, state, amount_cents, account_ref,
+          receipt_number, invoice_id, confirmed_at)
+       VALUES ($1, $2, 'confirmed', $3, $4, $5, $6, now())
+       RETURNING id`,
+      [
+        args.tenantId,
+        railStored,
+        args.amountCents,
+        String(inv.invoice_no),
+        ref,
+        args.invoiceId,
+      ],
+    );
+    const paymentId = res.rows[0].id as string;
+    const m = await this.reconcile(
+      client,
+      args.tenantId,
+      paymentId,
+      args.invoiceId,
+    );
+    if (!m.matched) {
+      throw new BadRequestException("Payment failed to match the invoice");
+    }
+    await this.audit.record(client, {
+      tenantId: args.tenantId,
+      actorUserId: args.userId,
+      action: "payment.manual",
+      entityType: "payment",
+      entityId: paymentId,
+      payload: {
+        invoiceNo: Number(inv.invoice_no),
+        rail: args.rail,
+        amountCents: args.amountCents,
+      },
+    });
+    return { paymentId, allocatedCents: m.allocatedCents };
+  }
+
   async reconcile(
     client: PoolClient,
     tenantId: string,
@@ -360,9 +442,19 @@ export class PaymentsService {
     }
 
     // Book the FULL amount received; overpayment shows as an AR credit.
-    // Debit account follows the rail: cash drawer vs M-Pesa float.
-    const debitAccount = payment.rail === "cash" ? "1000" : "1010";
-    const railLabel = payment.rail === "cash" ? "Cash" : "M-Pesa";
+    // Debit account follows the rail: cash drawer, bank, or M-Pesa float.
+    const debitAccount =
+      payment.rail === "cash"
+        ? "1000"
+        : payment.rail === "bank"
+          ? "1020"
+          : "1010";
+    const railLabel =
+      payment.rail === "cash"
+        ? "Cash"
+        : payment.rail === "bank"
+          ? "Bank"
+          : "M-Pesa";
     const posting = await this.ledger.post(client, {
       tenantId,
       postedBy: null,

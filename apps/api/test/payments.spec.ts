@@ -98,6 +98,11 @@ describe("payments + reconciliation", () => {
   });
 
   afterAll(async () => {
+    // Drain the cross-tenant fiscal queue so the extra invoices this spec
+    // issues don't overflow the capped drain loop in rules-and-fiscal.spec.
+    for (let i = 0; i < 60; i++) {
+      if (!(await fiscal.processOnce())) break;
+    }
     await fiscal.onModuleDestroy();
     await db.onModuleDestroy();
   });
@@ -311,6 +316,78 @@ describe("payments + reconciliation", () => {
     expect(after.state).toBe("failed");
     expect(after.last_error).toMatch(/cancelled/);
     expect(after.invoice).toBe("issued");
+  });
+
+  test("manual reconciliation across rails: bank + mpesa + cash settle one invoice", async () => {
+    const inv = await makeIssuedInvoice(1_000_000); // total 1,160,000
+    const bal = async (code: string): Promise<number> =>
+      db.withTenant(tenant, user, async (c) => {
+        const r = await c.query(
+          `SELECT coalesce(sum(jl.debit_cents - jl.credit_cents), 0)::bigint AS b
+           FROM journal_lines jl JOIN accounts a ON a.id = jl.account_id
+           WHERE a.code = $1`,
+          [code],
+        );
+        return Number(r.rows[0].b);
+      });
+    const bankBefore = await bal("1020");
+    const cashBefore = await bal("1000");
+
+    const r1 = await db.withTenant(tenant, user, (c) =>
+      payments.recordManualPayment(c, {
+        tenantId: tenant,
+        userId: user,
+        invoiceId: inv.id,
+        rail: "bank",
+        amountCents: 400_000,
+        reference: "CHQ-77",
+      }),
+    );
+    expect(r1.allocatedCents).toBe(400_000);
+    await db.withTenant(tenant, user, (c) =>
+      payments.recordManualPayment(c, {
+        tenantId: tenant,
+        userId: user,
+        invoiceId: inv.id,
+        rail: "mpesa",
+        amountCents: 300_000,
+      }),
+    );
+    const rest = inv.totalCents - 700_000;
+    await db.withTenant(tenant, user, (c) =>
+      payments.recordManualPayment(c, {
+        tenantId: tenant,
+        userId: user,
+        invoiceId: inv.id,
+        rail: "cash",
+        amountCents: rest,
+      }),
+    );
+
+    const final = await db.withTenant(tenant, user, async (c) => {
+      const r = await c.query(
+        "SELECT status, amount_paid_cents FROM invoices WHERE id = $1",
+        [inv.id],
+      );
+      return r.rows[0];
+    });
+    expect(final.status).toBe("paid");
+    expect(Number(final.amount_paid_cents)).toBe(inv.totalCents);
+    expect((await bal("1020")) - bankBefore).toBe(400_000);
+    expect((await bal("1000")) - cashBefore).toBe(rest);
+
+    // A closed invoice refuses further payment.
+    await expect(
+      db.withTenant(tenant, user, (c) =>
+        payments.recordManualPayment(c, {
+          tenantId: tenant,
+          userId: user,
+          invoiceId: inv.id,
+          rail: "cash",
+          amountCents: 100,
+        }),
+      ),
+    ).rejects.toThrow();
   });
 
   test("trial balance still nets to zero; AR reflects only unpaid invoices", async () => {

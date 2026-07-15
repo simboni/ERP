@@ -33,6 +33,9 @@ function InvoiceView() {
   const id = useSearchParams().get("id") ?? "";
   const [inv, setInv] = useState<InvoiceDetail | null>(null);
   const [msisdn, setMsisdn] = useState("");
+  const [payRail, setPayRail] = useState<"cash" | "bank" | "mpesa">("cash");
+  const [payAmount, setPayAmount] = useState("");
+  const [payRef, setPayRef] = useState("");
   const [creditReason, setCreditReason] = useState("");
   const [editing, setEditing] = useState(false);
   const [editLines, setEditLines] = useState<
@@ -309,15 +312,86 @@ function InvoiceView() {
 
       {inv.status === "issued" && outstanding > 0 && (
         <div className="card">
-          <h2 style={{ marginTop: 0 }}>Collect via M-Pesa</h2>
+          <h2 style={{ marginTop: 0 }}>Record a payment</h2>
+          <p className="muted">
+            Outstanding <strong>{fmtKes(outstanding)}</strong>. Record how the
+            customer paid — cash, bank transfer/cheque or M-Pesa received —
+            or request an M-Pesa prompt to their phone. Part-payments are
+            fine; the balance stays open.
+          </p>
+          <div className="pos-pay" style={{ maxWidth: 380 }}>
+            {(["cash", "bank", "mpesa"] as const).map((r) => (
+              <button
+                key={r}
+                type="button"
+                className={payRail === r ? "active" : ""}
+                onClick={() => setPayRail(r)}
+              >
+                {r === "cash" ? "💵 Cash" : r === "bank" ? "🏦 Bank" : "📱 M-Pesa"}
+              </button>
+            ))}
+          </div>
+          <div className="row" style={{ marginTop: 10 }}>
+            <div>
+              <label>Amount (KES)</label>
+              <input
+                type="number"
+                value={payAmount}
+                placeholder={String(outstanding / 100)}
+                onChange={(e) => setPayAmount(e.target.value)}
+              />
+            </div>
+            <div style={{ flex: 2 }}>
+              <label>Reference (optional)</label>
+              <input
+                value={payRef}
+                placeholder={
+                  payRail === "bank"
+                    ? "Cheque / transfer no."
+                    : payRail === "mpesa"
+                      ? "M-Pesa code, e.g. QAB1CD2EF3"
+                      : "Receipt no."
+                }
+                onChange={(e) => setPayRef(e.target.value)}
+              />
+            </div>
+          </div>
+          <button
+            disabled={busy}
+            onClick={() =>
+              void act(async () => {
+                const cents = payAmount
+                  ? Math.round(Number(payAmount) * 100)
+                  : outstanding;
+                if (cents <= 0) throw new Error("Enter a positive amount");
+                await api(`/tenants/current/invoices/${id}/record-payment`, {
+                  method: "POST",
+                  body: {
+                    rail: payRail,
+                    amountCents: cents,
+                    reference: payRef || undefined,
+                  },
+                });
+                setPayAmount("");
+                setPayRef("");
+                return `Payment of ${fmtKes(cents)} recorded.`;
+              })()
+            }
+          >
+            Record {payRail === "cash" ? "cash" : payRail === "bank" ? "bank" : "M-Pesa"} payment
+          </button>
+
+          <hr style={{ margin: "16px 0", border: 0, borderTop: "1px solid var(--line-soft)" }} />
+
+          <h3 style={{ margin: "0 0 6px" }}>Or push an M-Pesa prompt</h3>
           <div className="row">
             <div>
               <label>Customer phone (2547XXXXXXXX)</label>
               <input value={msisdn} onChange={(e) => setMsisdn(e.target.value)} />
             </div>
           </div>
-          <button disabled={busy} onClick={() => void collect()}>
-            Request {fmtKes(outstanding)} now
+          <button className="secondary" disabled={busy} onClick={() => void collect()}>
+            Request {fmtKes(outstanding)} via STK
           </button>
         </div>
       )}

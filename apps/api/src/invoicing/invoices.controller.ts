@@ -25,6 +25,7 @@ import { DbService } from "../db/db.service";
 import { LedgerService, seedDefaultAccounts } from "../ledger/ledger.service";
 import { AuditService } from "../audit/audit.service";
 import { InvoiceLineInput, InvoicesService } from "./invoices.service";
+import { PaymentsService } from "../payments/payments.service";
 
 const SALES_ROLES = ["owner", "admin", "accountant", "cashier"] as const;
 
@@ -36,7 +37,42 @@ export class InvoicesController {
     private readonly invoices: InvoicesService,
     private readonly ledger: LedgerService,
     private readonly audit: AuditService,
+    private readonly payments: PaymentsService,
   ) {}
+
+  /**
+   * Record a payment against an issued invoice by any rail — cash, bank
+   * transfer/cheque, or an M-Pesa amount already received. This is the
+   * manual counterpart to the automatic STK reconciliation, so an invoice
+   * can be settled even when M-Pesa isn't the channel, and in instalments.
+   */
+  @Post("invoices/:id/record-payment")
+  @Roles("owner", "admin", "accountant", "cashier")
+  async recordPayment(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) invoiceId: string,
+    @Body()
+    body: {
+      rail?: "cash" | "bank" | "mpesa";
+      amountCents?: number;
+      reference?: string;
+    },
+  ) {
+    if (!body?.rail) throw new BadRequestException("rail is required");
+    if (!Number.isInteger(body?.amountCents)) {
+      throw new BadRequestException("amountCents is required");
+    }
+    return this.db.withTenant(claims.tid, claims.sub, (client) =>
+      this.payments.recordManualPayment(client, {
+        tenantId: claims.tid,
+        userId: claims.sub,
+        invoiceId,
+        rail: body.rail!,
+        amountCents: body.amountCents!,
+        reference: body.reference,
+      }),
+    );
+  }
 
   @Post("accounts/seed-defaults")
   @Roles("owner", "admin", "accountant")
