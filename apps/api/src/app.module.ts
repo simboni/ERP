@@ -46,6 +46,8 @@ import { ReportsController } from "./ledger/reports.controller";
 import { HrController } from "./payroll/hr.controller";
 import { DashboardController } from "./tenants/dashboard.controller";
 import { DemoDataController } from "./tenants/demo-data.controller";
+import { DocumentsController } from "./tenants/documents.controller";
+import { SearchController } from "./tenants/search.controller";
 import { TenantsController } from "./tenants/tenants.controller";
 
 @Module({
@@ -64,6 +66,8 @@ import { TenantsController } from "./tenants/tenants.controller";
     DemoDataController,
     HrController,
     CrmController,
+    SearchController,
+    DocumentsController,
     FiscalController,
     InvoicesController,
     SalesExtrasController,

@@ -53,6 +53,7 @@ const DICT = {
     navHr: "HR",
     navHrOverview: "HR & Leave",
     navCrm: "CRM",
+    navDocuments: "Documents",
   },
   sw: {
     tagline: "Ankara za eTIMS · Ulinganisho wa M-Pesa · Hesabu safi",
@@ -98,6 +99,7 @@ const DICT = {
     navHr: "Watumishi",
     navHrOverview: "HR na Likizo",
     navCrm: "CRM",
+    navDocuments: "Nyaraka",
   },
 } as const;
 

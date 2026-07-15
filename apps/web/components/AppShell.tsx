@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, clearTokens, getTenantToken } from "@/lib/api";
+import { CommandPalette } from "@/components/CommandPalette";
 import { LangToggle, useI18n, type TKey } from "@/lib/i18n";
 
 /* Minimal 16px stroke icon set (inline, no dependencies). */
@@ -130,6 +131,7 @@ const NAV: NavSection[] = [
       { href: "/purchases", labelKey: "purchases", icon: "cart" },
       { href: "/suppliers", labelKey: "navSuppliers", icon: "truck" },
       { href: "/inventory", labelKey: "navInventory", icon: "box" },
+      { href: "/documents", labelKey: "navDocuments", icon: "quote" },
     ],
   },
   {
@@ -166,6 +168,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       : (sessionStorage.getItem("jenga.tenantName") ?? ""),
   );
   const [open, setOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     if (!getTenantToken()) {
@@ -252,6 +266,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
           <span className="topbar-tenant">{tenantName}</span>
           <span className="topbar-spacer" />
+          <button
+            type="button"
+            className="topbar-search"
+            onClick={() => setPaletteOpen(true)}
+          >
+            🔍 Search <kbd>Ctrl K</kbd>
+          </button>
           <Link href="/invoices/new" className="topbar-add">
             <span className="topbar-add-plus">{Icons.plus}</span>
             {t("newInvoice").replace("+ ", "")}
@@ -271,6 +292,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </header>
         <main>{children}</main>
       </div>
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+      />
     </div>
   );
 }

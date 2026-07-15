@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, fmtKes } from "@/lib/api";
+import { DataTable } from "@/components/DataTable";
 import { useI18n } from "@/lib/i18n";
 
 interface CustomerRow {
@@ -29,7 +30,6 @@ interface CustomerInvoice {
 export default function CustomersPage() {
   const { t } = useI18n();
   const [rows, setRows] = useState<CustomerRow[]>([]);
-  const [q, setQ] = useState("");
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<CustomerRow | null>(null);
   const [history, setHistory] = useState<CustomerInvoice[] | null>(null);
@@ -55,10 +55,6 @@ export default function CustomersPage() {
       setHistory([]);
     }
   };
-
-  const filtered = rows.filter(
-    (c) => !q || c.name.toLowerCase().includes(q.toLowerCase()),
-  );
 
   if (selected) {
     return (
@@ -135,58 +131,72 @@ export default function CustomersPage() {
     <>
       <h1>{t("navCustomers")}</h1>
       {error && <div className="err">{error}</div>}
-      <input
-        placeholder={`${t("search")}…`}
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        style={{ maxWidth: 320 }}
-      />
       <div className="card">
-        {filtered.length === 0 ? (
-          <p className="muted">
-            No customers yet — they are created with your first invoice or
-            quote.
-          </p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>{t("customer")}</th>
-                <th>Contact</th>
-                <th>{t("invoices")}</th>
-                <th>Invoiced</th>
-                <th>Outstanding</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((c) => (
-                <tr key={c.id}>
-                  <td>
-                    <a
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        void open(c);
-                      }}
-                    >
-                      {c.name}
-                    </a>
-                  </td>
-                  <td className="muted">{c.phone ?? c.email ?? "—"}</td>
-                  <td>{c.invoice_count}</td>
-                  <td>{fmtKes(c.invoiced_cents)}</td>
-                  <td>
-                    {Number(c.outstanding_cents) > 0 ? (
-                      <strong>{fmtKes(c.outstanding_cents)}</strong>
-                    ) : (
-                      <span className="muted">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <DataTable
+          rows={rows}
+          csvName="customers"
+          searchKeys={["name", "phone", "email"]}
+          pageSizeDefault={25}
+          empty={
+            <div className="empty">
+              <span className="empty-icon">🤝</span>
+              <p>
+                No customers yet — they are created with your first invoice
+                or quote.
+              </p>
+            </div>
+          }
+          columns={[
+            {
+              key: "name",
+              label: t("customer"),
+              render: (c) => (
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    void open(c);
+                  }}
+                >
+                  {c.name}
+                </a>
+              ),
+            },
+            {
+              key: "phone",
+              label: "Contact",
+              value: (c) => c.phone ?? c.email ?? "",
+              render: (c) => (
+                <span className="muted">{c.phone ?? c.email ?? "—"}</span>
+              ),
+            },
+            {
+              key: "invoice_count",
+              label: t("invoices"),
+              num: true,
+              value: (c) => c.invoice_count,
+            },
+            {
+              key: "invoiced_cents",
+              label: "Invoiced",
+              num: true,
+              value: (c) => Number(c.invoiced_cents),
+              render: (c) => fmtKes(c.invoiced_cents),
+            },
+            {
+              key: "outstanding_cents",
+              label: "Outstanding",
+              num: true,
+              value: (c) => Number(c.outstanding_cents),
+              render: (c) =>
+                Number(c.outstanding_cents) > 0 ? (
+                  <strong>{fmtKes(c.outstanding_cents)}</strong>
+                ) : (
+                  <span className="muted">—</span>
+                ),
+            },
+          ]}
+        />
       </div>
     </>
   );
