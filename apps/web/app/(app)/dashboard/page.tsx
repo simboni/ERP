@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { api, clearTokens, fmtKes, getTenantToken } from "@/lib/api";
-import { LangToggle, useI18n } from "@/lib/i18n";
+import { api, fmtKes, getTenantToken } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 
 interface TrialRow {
   code: string;
@@ -74,21 +74,7 @@ export default function Dashboard() {
 
   return (
     <>
-      <div className="row" style={{ alignItems: "baseline" }}>
-        <h1>{tenant?.name ?? "…"}</h1>
-        <span className="muted" style={{ textAlign: "right" }}>
-          <a
-            href="#"
-            onClick={(e) => {
-              e.preventDefault();
-              clearTokens();
-              router.replace("/");
-            }}
-          >
-            {t("signOut")}
-          </a>
-        </span>
-      </div>
+      <h1>{tenant?.name ?? "…"}</h1>
       {error && <div className="err">{error}</div>}
 
       <div className="row">
@@ -105,17 +91,6 @@ export default function Dashboard() {
           <div className="stat">{fmtKes(vatDue)}</div>
         </div>
       </div>
-
-      <p>
-        <Link href="/payments">{t("payments")}</Link> ·{" "}
-        <Link href="/payroll">{t("payroll")}</Link> ·{" "}
-        <Link href="/purchases">{t("purchases")}</Link> ·{" "}
-        <Link href="/vat">{t("vat")}</Link> ·{" "}
-        <Link href="/quotes">Quotes</Link> ·{" "}
-        <Link href="/inventory">Inventory</Link> ·{" "}
-        <Link href="/reports">Reports</Link> ·{" "}
-        <Link href="/settings">Settings</Link> · <LangToggle />
-      </p>
 
       {deadlines.length > 0 && (
         <div className="card">

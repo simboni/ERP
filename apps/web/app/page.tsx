@@ -95,7 +95,7 @@ export default function AuthPage() {
 
   if (memberships) {
     return (
-      <>
+      <main className="auth">
         <h1>{t("chooseWorkspace")}</h1>
         {memberships.map((m) => (
           <div className="card" key={m.tenantId}>
@@ -105,12 +105,12 @@ export default function AuthPage() {
             <button onClick={() => void selectTenant(m.tenantId)}>{t("open")}</button>
           </div>
         ))}
-      </>
+      </main>
     );
   }
 
   return (
-    <>
+    <main className="auth">
       <h1>Jenga ERP</h1>
       <p className="muted"><LangToggle /></p>
       <p className="muted" style={{ fontSize: "0.75rem" }}>{serverInfo}</p>
@@ -163,6 +163,6 @@ export default function AuthPage() {
           </button>
         </form>
       </div>
-    </>
+    </main>
   );
 }

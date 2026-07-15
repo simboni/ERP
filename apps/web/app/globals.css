@@ -27,7 +27,86 @@ body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   line-height: 1.5;
 }
-main { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
+main, .auth { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
+
+/* ---- application shell ---- */
+.shell { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--card);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+.sidebar-brand { padding: 18px 20px 10px; }
+.sidebar-brand a { font-weight: 800; font-size: 1.05rem; color: var(--brand); }
+.sidebar nav { flex: 1; padding: 4px 10px 12px; }
+.nav-section { margin-top: 10px; }
+.nav-title {
+  padding: 6px 10px 2px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.navlink {
+  display: block;
+  padding: 7px 10px;
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 0.92rem;
+}
+.navlink:hover { background: var(--bg); }
+.navlink.active { background: var(--brand); color: var(--brand-ink); font-weight: 600; }
+.sidebar-foot { padding: 12px 20px; border-top: 1px solid var(--line); font-size: 0.85rem; }
+.shell-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.topbar-tenant { font-weight: 600; font-size: 0.95rem; }
+.topbar-spacer { flex: 1; }
+.hamburger {
+  display: none;
+  margin: 0;
+  padding: 4px 10px;
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  font-size: 1rem;
+}
+.scrim { display: none; }
+@media (max-width: 760px) {
+  .sidebar {
+    position: fixed;
+    left: 0;
+    z-index: 20;
+    transform: translateX(-100%);
+    transition: transform 0.18s ease;
+    box-shadow: 2px 0 16px rgba(0, 0, 0, 0.25);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .hamburger { display: inline-block; }
+  .scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 15;
+    background: rgba(0, 0, 0, 0.35);
+  }
+}
 h1 { font-size: 1.4rem; margin: 0 0 4px; }
 h2 { font-size: 1.05rem; margin: 24px 0 8px; }
 p.muted, span.muted { color: var(--muted); font-size: 0.9rem; }
