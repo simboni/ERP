@@ -7,6 +7,9 @@
   --brand: #0d7a3f; /* Kenyan green */
   --brand-ink: #ffffff;
   --danger: #b3261e;
+  /* chart palette — CVD-validated pair per mode */
+  --chart-1: #0d7a3f;
+  --chart-2: #3a5fc4;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -17,6 +20,8 @@
     --line: #2b2f2b;
     --brand: #2fa866;
     --brand-ink: #06130b;
+    --chart-1: #2fa866;
+    --chart-2: #6486e6;
   }
 }
 * { box-sizing: border-box; }
@@ -152,6 +157,29 @@ th { color: var(--muted); font-weight: 500; font-size: 0.8rem; }
   border: 1px solid var(--line);
 }
 .pill.paid, .pill.signed { background: var(--brand); color: var(--brand-ink); border: 0; }
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  margin-right: 6px;
+}
+.chart-tip {
+  position: absolute;
+  top: 8px;
+  transform: translateX(-50%);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  pointer-events: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  white-space: nowrap;
+  z-index: 3;
+}
+.quick-actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
+.quick-actions button { margin-top: 0; }
 .row { display: flex; gap: 12px; flex-wrap: wrap; }
 .row > * { flex: 1; min-width: 180px; }
 .stat { font-size: 1.5rem; font-weight: 700; }
