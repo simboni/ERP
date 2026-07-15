@@ -41,7 +41,9 @@ import { PayrollService } from "./payroll/payroll.service";
 import { BillsController } from "./purchases/bills.controller";
 import { BillsService } from "./purchases/bills.service";
 import { RulesService } from "./rules/rules.service";
+import { ReportsController } from "./ledger/reports.controller";
 import { DashboardController } from "./tenants/dashboard.controller";
+import { DemoDataController } from "./tenants/demo-data.controller";
 import { TenantsController } from "./tenants/tenants.controller";
 
 @Module({
@@ -56,6 +58,8 @@ import { TenantsController } from "./tenants/tenants.controller";
     AuthController,
     TenantsController,
     DashboardController,
+    ReportsController,
+    DemoDataController,
     FiscalController,
     InvoicesController,
     SalesExtrasController,

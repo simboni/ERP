@@ -178,6 +178,17 @@ th { color: var(--muted); font-weight: 500; font-size: 0.8rem; }
   white-space: nowrap;
   z-index: 3;
 }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 12px 0; }
+.tabs .tab {
+  margin-top: 0;
+  padding: 7px 14px;
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+.tabs .tab.active { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
 .quick-actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
 .quick-actions button { margin-top: 0; }
 .row { display: flex; gap: 12px; flex-wrap: wrap; }

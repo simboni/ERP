@@ -178,6 +178,43 @@ export default function SettingsPage() {
           Export all data
         </button>
       </div>
+
+      <h2>Demo data</h2>
+      <div className="card">
+        <p className="muted">
+          Fill this workspace with a realistic sample business — 100
+          customers, 100 invoices across six months, payments, quotes,
+          suppliers, bills, expenses, stock and a payroll run — so you can
+          explore every module populated. Takes about a minute. Only works
+          on a workspace that is still mostly empty.
+        </p>
+        <button
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            setMsg("Generating demo data — this takes about a minute…");
+            setError("");
+            api<{ counts: Record<string, number> }>(
+              "/tenants/current/demo-data",
+              { method: "POST" },
+            )
+              .then((r) =>
+                setMsg(
+                  `Demo data loaded: ${Object.entries(r.counts)
+                    .map(([k, v]) => `${v} ${k}`)
+                    .join(", ")}. Open the Dashboard to see it.`,
+                ),
+              )
+              .catch((e) =>
+                setError(e instanceof Error ? e.message : "seeding failed"),
+              )
+              .finally(() => setBusy(false));
+          }}
+        >
+          Load demo data
+        </button>
+        {msg && <p className="muted">{msg}</p>}
+      </div>
     </>
   );
 }
