@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, fmtKes, fmtKes0, getTenantToken } from "@/lib/api";
 import { BarChart } from "@/components/BarChart";
 import { Icons } from "@/components/AppShell";
+import { Onboarding } from "@/components/Onboarding";
 import { useI18n } from "@/lib/i18n";
 
 interface TrialRow {
@@ -143,6 +144,9 @@ export default function Dashboard() {
     <>
       <h1>{t("navDashboard")}</h1>
       {error && <div className="err">{error}</div>}
+
+      {/* First-run wizard: only a brand-new workspace (no invoices) sees it. */}
+      {!loading && !error && <Onboarding invoiceCount={invoices.length} />}
 
       {loading ? (
         <div className="tiles">

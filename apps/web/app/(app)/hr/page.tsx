@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, fmtKes0 } from "@/lib/api";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { DataTable } from "@/components/DataTable";
 
 interface HeadcountRow {
@@ -1034,11 +1035,10 @@ export default function HrPage() {
                     </td>
                     <td>
                       {m.role !== "owner" && (
-                        <button
-                          type="button"
+                        <ConfirmButton
                           className="secondary dt-btn"
                           style={{ marginTop: 0 }}
-                          onClick={() =>
+                          onConfirm={() =>
                             void act(async () => {
                               const r = await api<{ tempPassword: string }>(
                                 `/tenants/current/members/${m.user_id}/reset-password`,
@@ -1051,7 +1051,7 @@ export default function HrPage() {
                           }
                         >
                           Reset password
-                        </button>
+                        </ConfirmButton>
                       )}
                     </td>
                   </tr>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { api, fmtKes, getTenantToken } from "@/lib/api";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { DataTable } from "@/components/DataTable";
 
 interface Supplier {
@@ -262,9 +263,9 @@ export default function PurchasesPage() {
                     </button>
                   )}
                   {b.status === "approved" && (
-                    <button disabled={busy} onClick={() => void pay(b.id)()}>
+                    <ConfirmButton disabled={busy} onConfirm={() => void pay(b.id)()}>
                       Pay (bank)
-                    </button>
+                    </ConfirmButton>
                   )}
                 </>
               ),

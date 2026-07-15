@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { api, getApiBase, fmtKes, getTenantToken } from "@/lib/api";
+import { ConfirmButton } from "@/components/ConfirmButton";
 
 interface Employee {
   id: string;
@@ -255,9 +256,12 @@ export default function PayrollPage() {
               </button>
             )}
             {detail.status === "draft" && (
-              <button disabled={busy} onClick={() => void commitRun(detail.id)()}>
+              <ConfirmButton
+                disabled={busy}
+                onConfirm={() => void commitRun(detail.id)()}
+              >
                 Commit run (posts to ledger)
-              </button>
+              </ConfirmButton>
             )}
           </div>
         </>

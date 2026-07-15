@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, fmtKes } from "@/lib/api";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { DataTable } from "@/components/DataTable";
 
 interface PoRow {
@@ -304,11 +305,10 @@ export default function PurchaseOrdersPage() {
                       Number(r.qty_received) === 0 && (
                         <>
                           {" "}
-                          <button
-                            type="button"
+                          <ConfirmButton
                             className="secondary dt-btn"
                             style={{ marginTop: 0 }}
-                            onClick={() =>
+                            onConfirm={() =>
                               void act(
                                 () =>
                                   api(
@@ -320,7 +320,7 @@ export default function PurchaseOrdersPage() {
                             }
                           >
                             Cancel
-                          </button>
+                          </ConfirmButton>
                         </>
                       )}
                   </span>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, fmtKes } from "@/lib/api";
+import { ConfirmButton } from "@/components/ConfirmButton";
 
 interface Item {
   id: string;
@@ -569,19 +570,34 @@ export default function PosPage() {
                         </span>
                       </td>
                       <td>
-                        <button
-                          type="button"
-                          className="secondary dt-btn"
-                          style={{ marginTop: 0 }}
-                          onClick={() =>
-                            void api(`/tenants/current/items/${i.id}`, {
-                              method: "PATCH",
-                              body: { active: i.active === false },
-                            }).then(load).catch((er) => setError(er instanceof Error ? er.message : "failed"))
-                          }
-                        >
-                          {i.active === false ? "Restore" : "Archive"}
-                        </button>
+                        {i.active === false ? (
+                          <button
+                            type="button"
+                            className="secondary dt-btn"
+                            style={{ marginTop: 0 }}
+                            onClick={() =>
+                              void api(`/tenants/current/items/${i.id}`, {
+                                method: "PATCH",
+                                body: { active: true },
+                              }).then(load).catch((er) => setError(er instanceof Error ? er.message : "failed"))
+                            }
+                          >
+                            Restore
+                          </button>
+                        ) : (
+                          <ConfirmButton
+                            className="secondary dt-btn"
+                            style={{ marginTop: 0 }}
+                            onConfirm={() =>
+                              void api(`/tenants/current/items/${i.id}`, {
+                                method: "PATCH",
+                                body: { active: false },
+                              }).then(load).catch((er) => setError(er instanceof Error ? er.message : "failed"))
+                            }
+                          >
+                            Archive
+                          </ConfirmButton>
+                        )}
                       </td>
                     </tr>
                   ))}

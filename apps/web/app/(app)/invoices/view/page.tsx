@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { api, getApiBase, fmtKes, getTenantToken } from "@/lib/api";
+import { ConfirmButton } from "@/components/ConfirmButton";
 
 interface InvoiceDetail {
   id: string;
@@ -330,9 +331,13 @@ function InvoiceView() {
             onChange={(e) => setCreditReason(e.target.value)}
             placeholder="e.g. Goods returned damaged"
           />
-          <button className="secondary" disabled={busy} onClick={() => void creditNote()}>
+          <ConfirmButton
+            className="secondary"
+            disabled={busy}
+            onConfirm={() => void creditNote()}
+          >
             Issue credit note
-          </button>
+          </ConfirmButton>
         </div>
       )}
     </>
