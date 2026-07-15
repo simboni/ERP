@@ -5,19 +5,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { api, getApiBase, getTenantToken, getUserToken } from "@/lib/api";
 
-interface Member {
-  id: string;
-  full_name: string;
-  email: string;
-  role: string;
-  status: string;
-}
-
 export default function SettingsPage() {
   const router = useRouter();
-  const [members, setMembers] = useState<Member[]>([]);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("cashier");
   const [shortcode, setShortcode] = useState("");
   const [totp, setTotp] = useState<{ secret: string; otpauth: string } | null>(null);
   const [totpCode, setTotpCode] = useState("");
@@ -26,7 +15,7 @@ export default function SettingsPage() {
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async (): Promise<void> => {
-    setMembers(await api<Member[]>("/tenants/current/members"));
+    await api("/tenants/current");
   }, []);
 
   useEffect(() => {
@@ -50,15 +39,6 @@ export default function SettingsPage() {
       setBusy(false);
     }
   };
-
-  const addMember = act(async () => {
-    await api("/tenants/current/members", {
-      method: "POST",
-      body: { email: inviteEmail, role: inviteRole },
-    });
-    setInviteEmail("");
-    return "Member added.";
-  });
 
   const registerShortcode = act(async () => {
     await api("/tenants/current/payments/shortcodes", {
@@ -101,40 +81,13 @@ export default function SettingsPage() {
   return (
     <>
       <p><Link href="/dashboard">← Dashboard</Link></p>
-      <h1>Settings & team</h1>
+      <h1>Settings</h1>
       {msg && <div className="card" style={{ borderColor: "var(--brand)" }}>{msg}</div>}
       {error && <div className="err">{error}</div>}
-
-      <h2>Team</h2>
-      <div className="card">
-        <table>
-          <thead><tr><th>Name</th><th>Email</th><th>Role</th></tr></thead>
-          <tbody>
-            {members.map((m) => (
-              <tr key={m.id}>
-                <td>{m.full_name}</td>
-                <td>{m.email}</td>
-                <td><span className="pill">{m.role}</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div className="row">
-          <div style={{ flex: 2 }}>
-            <label>Email of an existing Jenga user</label>
-            <input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} />
-          </div>
-          <div>
-            <label>Role</label>
-            <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}>
-              {["admin", "accountant", "cashier", "storekeeper", "payroll", "viewer"].map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <button disabled={busy || !inviteEmail} onClick={() => void addMember()}>Add member</button>
-      </div>
+      <p className="muted">
+        Team members and staff onboarding live under <Link href="/hr">HR</Link>{" "}
+        (Team access and Employees tabs).
+      </p>
 
       <h2>M-Pesa paybill / till</h2>
       <div className="card">
@@ -212,6 +165,31 @@ export default function SettingsPage() {
           }}
         >
           Load demo data
+        </button>{" "}
+        <button
+          className="secondary"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            setError("");
+            api<{ counts: Record<string, number> }>(
+              "/tenants/current/demo-data/hr-crm",
+              { method: "POST" },
+            )
+              .then((r) =>
+                setMsg(
+                  `HR + CRM demo loaded: ${Object.entries(r.counts)
+                    .map(([k, v]) => `${v} ${k}`)
+                    .join(", ")}.`,
+                ),
+              )
+              .catch((e) =>
+                setError(e instanceof Error ? e.message : "seeding failed"),
+              )
+              .finally(() => setBusy(false));
+          }}
+        >
+          Load HR + CRM demo data
         </button>
         {msg && <p className="muted">{msg}</p>}
       </div>

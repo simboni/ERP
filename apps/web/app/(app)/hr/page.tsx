@@ -52,7 +52,32 @@ interface Employee {
   department: string | null;
 }
 
-type Tab = "overview" | "employees" | "leave" | "departments" | "announcements";
+type Tab =
+  | "overview"
+  | "employees"
+  | "attendance"
+  | "leave"
+  | "team"
+  | "departments"
+  | "announcements";
+
+interface AttendanceToday {
+  employee_id: string;
+  full_name: string;
+  check_in: string | null;
+  check_out: string | null;
+  late: boolean | null;
+}
+interface Attendance {
+  today: AttendanceToday[];
+  month: { inTime: number; late: number; absent: number };
+}
+interface Member {
+  id: string;
+  full_name: string;
+  email: string;
+  role: string;
+}
 const d10 = (s: string | null | undefined): string => s?.slice(0, 10) ?? "";
 const AVATAR_COLORS = ["#2b62c4", "#6d3fc0", "#0b6b38", "#c2334d", "#8a5a00"];
 const initials = (name: string): string =>
@@ -89,6 +114,26 @@ export default function HrPage() {
   const [annTitle, setAnnTitle] = useState("");
   const [annBody, setAnnBody] = useState("");
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [attendance, setAttendance] = useState<Attendance | null>(null);
+  const [clock, setClock] = useState("");
+  const [members, setMembers] = useState<Member[]>([]);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("cashier");
+
+  useEffect(() => {
+    const tick = (): void =>
+      setClock(
+        new Date().toLocaleTimeString("en-KE", {
+          timeZone: "Africa/Nairobi",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        }),
+      );
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, []);
 
   const fail = (e: unknown): void =>
     setError(e instanceof Error ? e.message : "failed");
@@ -101,14 +146,18 @@ export default function HrPage() {
       api<Policy[]>("/tenants/current/hr/leave/policies"),
       api<LeaveRow[]>("/tenants/current/hr/leave/requests"),
       api<Announcement[]>("/tenants/current/hr/announcements"),
+      api<Attendance>("/tenants/current/hr/attendance"),
+      api<Member[]>("/tenants/current/members").catch(() => [] as Member[]),
     ])
-      .then(([o, e, d, p, r, a]) => {
+      .then(([o, e, d, p, r, a, att, m]) => {
         setOverview(o);
         setEmployees(e);
         setDepartments(d);
         setPolicies(p);
         setRequests(r);
         setAnnouncements(a);
+        setAttendance(att);
+        setMembers(m);
       })
       .catch(fail);
   }, []);
@@ -161,7 +210,9 @@ export default function HrPage() {
           [
             ["overview", "Overview"],
             ["employees", "Employees"],
+            ["attendance", "Attendance"],
             ["leave", "Leave"],
+            ["team", "Team access"],
             ["departments", "Departments"],
             ["announcements", "Announcements"],
           ] as [Tab, string][]
@@ -534,6 +585,253 @@ export default function HrPage() {
             </div>
           </div>
         </>
+      )}
+
+      {tab === "attendance" && (
+        <>
+          <div className="row">
+            <div className="card" style={{ textAlign: "center" }}>
+              <span className="muted">Nairobi time</span>
+              <div
+                className="stat"
+                style={{ fontSize: "2rem", letterSpacing: "0.02em" }}
+              >
+                {clock}
+              </div>
+              <p className="muted">
+                Shift 09:00 – 18:00 · late after 09:05
+              </p>
+            </div>
+            <div className="card">
+              <div className="card-head">
+                <h3>This month</h3>
+              </div>
+              {attendance &&
+                (
+                  [
+                    ["In-time", attendance.month.inTime, "var(--ok)"],
+                    ["Late", attendance.month.late, "var(--warn)"],
+                    ["Absent", attendance.month.absent, "var(--danger)"],
+                  ] as [string, number, string][]
+                ).map(([label, v, color]) => {
+                  const total =
+                    attendance.month.inTime +
+                      attendance.month.late +
+                      attendance.month.absent || 1;
+                  return (
+                    <div key={label} className="bar-row">
+                      <span className="bar-label">{label}</span>
+                      <span className="bar-track">
+                        <span
+                          className="bar-fill"
+                          style={{
+                            width: `${Math.max(v > 0 ? 3 : 0, (v / total) * 100)}%`,
+                            background: color,
+                          }}
+                        />
+                      </span>
+                      <span className="bar-amt" style={{ minWidth: 40 }}>
+                        {v}
+                      </span>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-head">
+              <h3>Today</h3>
+            </div>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th>Status</th>
+                    <th>In</th>
+                    <th>Out</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(attendance?.today ?? []).map((r, i) => (
+                    <tr key={r.employee_id}>
+                      <td>
+                        <span
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                          }}
+                        >
+                          <span
+                            className="dot-avatar"
+                            style={{
+                              width: 30,
+                              height: 30,
+                              fontSize: "0.72rem",
+                              background:
+                                AVATAR_COLORS[i % AVATAR_COLORS.length],
+                            }}
+                          >
+                            {initials(r.full_name)}
+                          </span>
+                          {r.full_name}
+                        </span>
+                      </td>
+                      <td>
+                        {r.check_in ? (
+                          <span className={`pill ${r.late ? "pending" : "paid"}`}>
+                            {r.late ? "late" : "in-time"}
+                          </span>
+                        ) : (
+                          <span className="pill overdue">absent</span>
+                        )}
+                      </td>
+                      <td className="muted">
+                        {r.check_in
+                          ? new Date(r.check_in).toLocaleTimeString("en-KE", {
+                              timeZone: "Africa/Nairobi",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "—"}
+                      </td>
+                      <td className="muted">
+                        {r.check_out
+                          ? new Date(r.check_out).toLocaleTimeString("en-KE", {
+                              timeZone: "Africa/Nairobi",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "—"}
+                      </td>
+                      <td>
+                        {!r.check_in ? (
+                          <button
+                            type="button"
+                            style={{ marginTop: 0, padding: "5px 14px" }}
+                            onClick={() =>
+                              void act(() =>
+                                api("/tenants/current/hr/attendance/check-in", {
+                                  method: "POST",
+                                  body: { employeeId: r.employee_id },
+                                }),
+                              )
+                            }
+                          >
+                            Check in
+                          </button>
+                        ) : !r.check_out ? (
+                          <button
+                            type="button"
+                            className="secondary"
+                            style={{ marginTop: 0, padding: "5px 14px" }}
+                            onClick={() =>
+                              void act(() =>
+                                api(
+                                  "/tenants/current/hr/attendance/check-out",
+                                  {
+                                    method: "POST",
+                                    body: { employeeId: r.employee_id },
+                                  },
+                                ),
+                              )
+                            }
+                          >
+                            Check out
+                          </button>
+                        ) : (
+                          <span className="muted">done</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {tab === "team" && (
+        <div className="card">
+          <div className="card-head">
+            <h3>Team access ({members.length})</h3>
+          </div>
+          <p className="muted">
+            People who can sign in to this workspace and what they are
+            allowed to do. Employees on the payroll do not get login access
+            unless you add them here.
+          </p>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                </tr>
+              </thead>
+              <tbody>
+                {members.map((m) => (
+                  <tr key={m.id}>
+                    <td>{m.full_name}</td>
+                    <td className="muted">{m.email}</td>
+                    <td>
+                      <span className="pill sent">{m.role}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="row">
+            <div style={{ flex: 2 }}>
+              <label>Email of an existing Jenga user</label>
+              <input
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+              />
+            </div>
+            <div>
+              <label>Role</label>
+              <select
+                value={inviteRole}
+                onChange={(e) => setInviteRole(e.target.value)}
+              >
+                {[
+                  "admin",
+                  "accountant",
+                  "cashier",
+                  "storekeeper",
+                  "payroll",
+                  "viewer",
+                ].map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <button
+            disabled={!inviteEmail}
+            onClick={() =>
+              void act(
+                () =>
+                  api("/tenants/current/members", {
+                    method: "POST",
+                    body: { email: inviteEmail, role: inviteRole },
+                  }).then(() => setInviteEmail("")),
+                "Member added.",
+              )
+            }
+          >
+            Add member
+          </button>
+        </div>
       )}
 
       {tab === "leave" && (

@@ -298,6 +298,104 @@ export class HrController {
     });
   }
 
+  /**
+   * Check an employee in for today (Nairobi time). Late after 09:05.
+   * Idempotent: a second check-in the same day returns the existing row.
+   */
+  @Post("attendance/check-in")
+  @HttpCode(200)
+  async checkIn(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Body() body: { employeeId?: string },
+  ) {
+    if (!body?.employeeId) {
+      throw new BadRequestException("employeeId is required");
+    }
+    return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const res = await client.query(
+        `INSERT INTO attendance (tenant_id, employee_id, work_date, late)
+         VALUES ($1, $2, (now() AT TIME ZONE 'Africa/Nairobi')::date,
+                 (now() AT TIME ZONE 'Africa/Nairobi')::time > time '09:05')
+         ON CONFLICT (tenant_id, employee_id, work_date) DO UPDATE
+           SET employee_id = EXCLUDED.employee_id
+         RETURNING id, work_date, check_in, check_out, late,
+                   (xmax = 0) AS created`,
+        [claims.tid, body.employeeId],
+      );
+      return res.rows[0];
+    });
+  }
+
+  @Post("attendance/check-out")
+  @HttpCode(200)
+  async checkOut(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Body() body: { employeeId?: string },
+  ) {
+    if (!body?.employeeId) {
+      throw new BadRequestException("employeeId is required");
+    }
+    return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const res = await client.query(
+        `UPDATE attendance SET check_out = now()
+         WHERE employee_id = $1
+           AND work_date = (now() AT TIME ZONE 'Africa/Nairobi')::date
+           AND check_out IS NULL
+         RETURNING id, check_in, check_out`,
+        [body.employeeId],
+      );
+      if (!res.rows[0]) {
+        throw new BadRequestException("No open check-in for today");
+      }
+      return res.rows[0];
+    });
+  }
+
+  /** Today's roster + this month's in-time/late/absent totals. */
+  @Get("attendance")
+  async attendance(@TenantClaims() claims: TenantTokenClaims) {
+    return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const [today, month] = await Promise.all([
+        client.query(
+          `SELECT e.id AS employee_id, e.full_name,
+                  a.check_in, a.check_out, a.late
+           FROM employees e
+           LEFT JOIN attendance a
+             ON a.employee_id = e.id
+            AND a.work_date = (now() AT TIME ZONE 'Africa/Nairobi')::date
+           WHERE e.status = 'active'
+           ORDER BY e.full_name`,
+        ),
+        client.query(
+          `SELECT count(*) FILTER (WHERE NOT late)::int AS in_time,
+                  count(*) FILTER (WHERE late)::int AS late
+           FROM attendance
+           WHERE date_trunc('month', work_date)
+                 = date_trunc('month', (now() AT TIME ZONE 'Africa/Nairobi')::date)`,
+        ),
+      ]);
+      const workingDaysRes = await client.query(
+        `SELECT count(*)::int AS days
+         FROM generate_series(
+                date_trunc('month', (now() AT TIME ZONE 'Africa/Nairobi')::date)::date,
+                (now() AT TIME ZONE 'Africa/Nairobi')::date, '1 day') d
+         WHERE extract(isodow FROM d) < 6`,
+      );
+      const active = today.rows.length;
+      const expected = active * workingDaysRes.rows[0].days;
+      const inTime = month.rows[0].in_time;
+      const late = month.rows[0].late;
+      return {
+        today: today.rows,
+        month: {
+          inTime,
+          late,
+          absent: Math.max(0, expected - inTime - late),
+        },
+      };
+    });
+  }
+
   @Get("announcements")
   async listAnnouncements(@TenantClaims() claims: TenantTokenClaims) {
     return this.db.withTenant(claims.tid, claims.sub, async (client) => {
