@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { api, fmtKes, getTenantToken } from "@/lib/api";
+import { DataTable } from "@/components/DataTable";
 
 interface Quote {
   id: string;
@@ -150,35 +151,64 @@ export default function QuotesPage() {
       </div>
 
       <div className="card">
-        {quotes.length === 0 ? (
-          <p className="muted">No quotes yet — most deals start here.</p>
-        ) : (
-          <table>
-            <thead>
-              <tr><th>No.</th><th>Customer</th><th>Total</th><th>Status</th><th></th></tr>
-            </thead>
-            <tbody>
-              {quotes.map((q) => (
-                <tr key={q.id}>
-                  <td>Q-{q.quote_no}</td>
-                  <td>{q.customer_name}</td>
-                  <td>{fmtKes(q.total_cents)}</td>
-                  <td><span className={`pill ${q.status === "converted" ? "paid" : ""}`}>{q.status}</span></td>
-                  <td>
-                    {["draft", "sent", "accepted"].includes(q.status) && (
-                      <button disabled={busy} onClick={() => void convert(q.id)()}>
-                        Convert to invoice
-                      </button>
-                    )}
-                    {q.invoice_id && (
-                      <Link href={`/invoices/view?id=${q.invoice_id}`}>invoice →</Link>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <DataTable
+          rows={quotes}
+          csvName="quotes"
+          searchKeys={["quote_no", "customer_name"]}
+          pageSizeDefault={25}
+          empty={
+            <p className="muted">No quotes yet — most deals start here.</p>
+          }
+          columns={[
+            {
+              key: "quote_no",
+              label: "No.",
+              value: (q) => q.quote_no,
+              render: (q) => <>Q-{q.quote_no}</>,
+            },
+            { key: "customer_name", label: "Customer" },
+            {
+              key: "total_cents",
+              label: "Total",
+              num: true,
+              value: (q) => Number(q.total_cents),
+              render: (q) => fmtKes(q.total_cents),
+            },
+            {
+              key: "status",
+              label: "Status",
+              render: (q) => (
+                <span
+                  className={`pill ${q.status === "converted" ? "paid" : ""}`}
+                >
+                  {q.status}
+                </span>
+              ),
+            },
+            {
+              key: "actions",
+              label: "",
+              value: () => "",
+              render: (q) => (
+                <>
+                  {["draft", "sent", "accepted"].includes(q.status) && (
+                    <button
+                      disabled={busy}
+                      onClick={() => void convert(q.id)()}
+                    >
+                      Convert to invoice
+                    </button>
+                  )}
+                  {q.invoice_id && (
+                    <Link href={`/invoices/view?id=${q.invoice_id}`}>
+                      invoice →
+                    </Link>
+                  )}
+                </>
+              ),
+            },
+          ]}
+        />
       </div>
     </>
   );

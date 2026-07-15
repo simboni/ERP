@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { api, fmtKes, getTenantToken } from "@/lib/api";
+import { DataTable } from "@/components/DataTable";
 
 interface Supplier {
   id: string;
@@ -185,48 +186,87 @@ export default function PurchasesPage() {
 
       <h2>Bills</h2>
       <div className="card">
-        {billsList.length === 0 ? (
-          <p className="muted">No bills yet.</p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th><th>Supplier</th><th>Ref</th><th>eTIMS</th>
-                <th>Total</th><th>Status</th><th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {billsList.map((b) => (
-                <tr key={b.id}>
-                  <td>{new Date(b.bill_date).toISOString().slice(0, 10)}</td>
-                  <td>{b.supplier_name}</td>
-                  <td>{b.supplier_invoice_no ?? "—"}</td>
-                  <td>
-                    {b.etims_control_number ? (
-                      <span className="pill signed">✓</span>
-                    ) : (
-                      <span className="pill" title="Not tax-deductible without eTIMS">⚠</span>
-                    )}
-                  </td>
-                  <td>{fmtKes(b.total_cents)}</td>
-                  <td><span className={`pill ${b.status === "paid" ? "paid" : ""}`}>{b.status}</span></td>
-                  <td>
-                    {b.status === "draft" && (
-                      <button className="secondary" disabled={busy} onClick={() => void approve(b.id)()}>
-                        Approve
-                      </button>
-                    )}
-                    {b.status === "approved" && (
-                      <button disabled={busy} onClick={() => void pay(b.id)()}>
-                        Pay (bank)
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <DataTable
+          rows={billsList}
+          csvName="bills"
+          searchKeys={["supplier_name", "supplier_invoice_no"]}
+          pageSizeDefault={25}
+          empty={<p className="muted">No bills yet.</p>}
+          columns={[
+            {
+              key: "bill_date",
+              label: "Date",
+              value: (b) => b.bill_date ?? "",
+              render: (b) => (
+                <span className="muted">
+                  {new Date(b.bill_date).toISOString().slice(0, 10)}
+                </span>
+              ),
+            },
+            { key: "supplier_name", label: "Supplier" },
+            {
+              key: "supplier_invoice_no",
+              label: "Ref",
+              value: (b) => b.supplier_invoice_no ?? "",
+              render: (b) => b.supplier_invoice_no ?? "—",
+            },
+            {
+              key: "etims_control_number",
+              label: "eTIMS",
+              value: (b) => b.etims_control_number ?? "",
+              render: (b) =>
+                b.etims_control_number ? (
+                  <span className="pill signed">✓</span>
+                ) : (
+                  <span
+                    className="pill"
+                    title="Not tax-deductible without eTIMS"
+                  >
+                    ⚠
+                  </span>
+                ),
+            },
+            {
+              key: "total_cents",
+              label: "Total",
+              num: true,
+              value: (b) => Number(b.total_cents),
+              render: (b) => fmtKes(b.total_cents),
+            },
+            {
+              key: "status",
+              label: "Status",
+              render: (b) => (
+                <span className={`pill ${b.status === "paid" ? "paid" : ""}`}>
+                  {b.status}
+                </span>
+              ),
+            },
+            {
+              key: "actions",
+              label: "",
+              value: () => "",
+              render: (b) => (
+                <>
+                  {b.status === "draft" && (
+                    <button
+                      className="secondary"
+                      disabled={busy}
+                      onClick={() => void approve(b.id)()}
+                    >
+                      Approve
+                    </button>
+                  )}
+                  {b.status === "approved" && (
+                    <button disabled={busy} onClick={() => void pay(b.id)()}>
+                      Pay (bank)
+                    </button>
+                  )}
+                </>
+              ),
+            },
+          ]}
+        />
       </div>
     </>
   );

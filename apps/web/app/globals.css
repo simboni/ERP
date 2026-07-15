@@ -693,6 +693,89 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
 .receipt-wrap { max-width: 360px; margin: 0 auto; }
 .receipt { font-size: 0.88rem; }
 
+/* ============================================================
+   Mobile sweep: flagship behavior under 760px.
+   Principles: 16px inputs (no iOS focus zoom), 44px touch targets,
+   single-column flow, swipeable tab bars, breathing room, no
+   horizontal page scroll (wide tables scroll inside their card).
+   ============================================================ */
+@media (max-width: 760px) {
+  body { font-size: 15px; overflow-x: hidden; }
+  .shell, .shell-main { max-width: 100vw; min-width: 0; }
+  main { padding: 16px 14px 96px; max-width: 100vw; overflow-x: hidden; }
+
+  /* Any bare table inside a card scrolls within the card, never the page */
+  .card > table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tabs { max-width: 100%; }
+  h1 { font-size: 1.3rem; }
+  h2 { margin-top: 22px; }
+
+  /* touch targets + iOS zoom prevention */
+  input, select, textarea { font-size: 16px; padding: 11px 12px; }
+  button { min-height: 44px; }
+  .dt-btn, .tabs .tab, .hamburger, .topbar-search { min-height: 36px; }
+
+  /* cards breathe but don't waste space */
+  .card { padding: 16px; border-radius: 14px; }
+  .row { gap: 10px; }
+  .row > .card { min-width: 100%; }
+
+  /* stat tiles: 2-up, tighter */
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .tile { padding: 14px 16px; min-height: 92px; }
+  .tile .tile-value { font-size: 1.12rem; padding-right: 34px; }
+  .tile .tile-icon { width: 30px; height: 30px; top: 12px; right: 12px; }
+  .tile .tile-icon svg { width: 15px; height: 15px; }
+
+  /* tab bars swipe horizontally instead of wrapping into a wall */
+  .tabs {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs .tab { white-space: nowrap; flex-shrink: 0; }
+
+  /* topbar: tenant truncates, actions stay reachable */
+  .topbar { gap: 8px; }
+  .topbar-tenant {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    flex-shrink: 1;
+  }
+  .topbar-add { padding: 7px 10px; }
+  .topbar-search { padding: 7px 10px; }
+
+  /* data tables: scroll inside the card, never the page */
+  .table-wrap table { min-width: 560px; }
+  .dt-toolbar input { flex: 1 1 100%; max-width: none !important; }
+  .dt-pager { flex-wrap: wrap; }
+
+  /* POS: full-width sell flow, cart follows content */
+  .pos-cart { position: static; }
+  .pos-items { max-height: none; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pos-item { min-height: 84px; }
+
+  /* bar rows wrap gracefully */
+  .bar-row { flex-wrap: wrap; }
+  .bar-row .bar-amt { min-width: 0; }
+
+  /* command palette fills the screen comfortably */
+  .palette-scrim { padding-top: 6vh; }
+  .palette { width: 94vw; }
+
+  /* quick actions become full-width stacks */
+  .quick-actions button { flex: 1 1 auto; }
+}
+
 /* ---- print ---- */
 @media print {
   .sidebar, .topbar, .quick-actions, .tabs, button, .no-print { display: none !important; }

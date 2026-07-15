@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api, fmtKes0 } from "@/lib/api";
+import { DataTable } from "@/components/DataTable";
 
 interface Contact {
   id: string;
@@ -302,85 +303,106 @@ export default function CrmPage() {
             </button>
           </div>
           <div className="card">
-            {contacts.length === 0 ? (
-              <div className="empty">
-                <span className="empty-icon">🤝</span>
-                <p>No contacts yet — add your first lead above.</p>
-              </div>
-            ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Contact</th>
-                    <th>Stage</th>
-                    <th className="num">Open deals</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {contacts.map((c) => (
-                    <tr key={c.id}>
-                      <td>
-                        {c.name}
-                        {c.company && (
-                          <>
-                            <br />
-                            <span className="muted">{c.company}</span>
-                          </>
-                        )}
-                      </td>
-                      <td className="muted">{c.phone ?? c.email ?? "—"}</td>
-                      <td>
-                        <span
-                          className={`pill ${
-                            c.stage === "customer"
-                              ? "paid"
-                              : c.stage === "opportunity"
-                                ? "issued"
-                                : "pending"
-                          }`}
-                        >
-                          {c.stage}
-                        </span>
-                      </td>
-                      <td className="num">{c.open_deals}</td>
-                      <td style={{ whiteSpace: "nowrap" }}>
-                        {CONTACT_STAGES.indexOf(c.stage) < 2 && (
-                          <button
-                            type="button"
-                            className="secondary"
-                            style={{ marginTop: 0, padding: "4px 12px" }}
-                            onClick={() =>
-                              void act(
-                                () =>
-                                  api(
-                                    `/tenants/current/crm/contacts/${c.id}/stage`,
-                                    {
-                                      method: "POST",
-                                      body: {
-                                        stage:
-                                          CONTACT_STAGES[
-                                            CONTACT_STAGES.indexOf(c.stage) + 1
-                                          ],
-                                      },
+            <DataTable
+              rows={contacts}
+              csvName="crm-contacts"
+              searchKeys={["name", "contact", "stage"]}
+              pageSizeDefault={10}
+              empty={
+                <div className="empty">
+                  <span className="empty-icon">🤝</span>
+                  <p>No contacts yet — add your first lead above.</p>
+                </div>
+              }
+              columns={[
+                {
+                  key: "name",
+                  label: "Name",
+                  value: (c) =>
+                    c.company ? `${c.name} ${c.company}` : c.name,
+                  render: (c) => (
+                    <>
+                      {c.name}
+                      {c.company && (
+                        <>
+                          <br />
+                          <span className="muted">{c.company}</span>
+                        </>
+                      )}
+                    </>
+                  ),
+                },
+                {
+                  key: "contact",
+                  label: "Contact",
+                  value: (c) => c.phone ?? c.email ?? "",
+                  render: (c) => (
+                    <span className="muted">{c.phone ?? c.email ?? "—"}</span>
+                  ),
+                },
+                {
+                  key: "stage",
+                  label: "Stage",
+                  render: (c) => (
+                    <span
+                      className={`pill ${
+                        c.stage === "customer"
+                          ? "paid"
+                          : c.stage === "opportunity"
+                            ? "issued"
+                            : "pending"
+                      }`}
+                    >
+                      {c.stage}
+                    </span>
+                  ),
+                },
+                {
+                  key: "open_deals",
+                  label: "Open deals",
+                  num: true,
+                  value: (c) => c.open_deals,
+                },
+                {
+                  key: "actions",
+                  label: "",
+                  value: () => "",
+                  render: (c) => (
+                    <span style={{ whiteSpace: "nowrap" }}>
+                      {CONTACT_STAGES.indexOf(c.stage) < 2 && (
+                        <button
+                          type="button"
+                          className="secondary"
+                          style={{ marginTop: 0, padding: "4px 12px" }}
+                          onClick={() =>
+                            void act(
+                              () =>
+                                api(
+                                  `/tenants/current/crm/contacts/${c.id}/stage`,
+                                  {
+                                    method: "POST",
+                                    body: {
+                                      stage:
+                                        CONTACT_STAGES[
+                                          CONTACT_STAGES.indexOf(c.stage) + 1
+                                        ],
                                     },
-                                  ),
-                                c.stage === "opportunity"
-                                  ? "Promoted to customer — now invoiceable."
-                                  : "Promoted to opportunity.",
-                              )
-                            }
-                          >
-                            Promote →
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+                                  },
+                                ),
+                              c.stage === "opportunity"
+                                ? "Promoted to customer — now invoiceable."
+                                : "Promoted to opportunity.",
+                            )
+                          }
+                        >
+                          Promote →
+                        </button>
+                      )}
+                    </span>
+                  ),
+                },
+              ]}
+            />
           </div>
         </>
       )}
@@ -451,54 +473,81 @@ export default function CrmPage() {
             </button>
           </div>
           <div className="card">
-            {activities.length === 0 ? (
-              <p className="muted">No activities yet.</p>
-            ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Contact</th>
-                    <th>Type</th>
-                    <th>Details</th>
-                    <th>Follow-up</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activities.map((a) => (
-                    <tr key={a.id} style={a.done ? { opacity: 0.55 } : undefined}>
-                      <td>{a.contact_name}</td>
-                      <td>
-                        <span className="pill sent">{a.kind}</span>
-                      </td>
-                      <td>{a.body}</td>
-                      <td className="muted">
-                        {a.due_date ? d10(a.due_date) : "—"}
-                      </td>
-                      <td>
-                        {!a.done && a.due_date && (
-                          <button
-                            type="button"
-                            className="secondary"
-                            style={{ marginTop: 0, padding: "4px 12px" }}
-                            onClick={() =>
-                              void act(() =>
-                                api(
-                                  `/tenants/current/crm/activities/${a.id}/done`,
-                                  { method: "POST" },
-                                ),
-                              )
-                            }
-                          >
-                            Done
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+            <DataTable
+              rows={activities}
+              csvName="crm-activities"
+              searchKeys={["contact_name", "kind", "body"]}
+              pageSizeDefault={10}
+              empty={<p className="muted">No activities yet.</p>}
+              columns={[
+                {
+                  key: "contact_name",
+                  label: "Contact",
+                  render: (a) => (
+                    <span style={a.done ? { opacity: 0.55 } : undefined}>
+                      {a.contact_name}
+                    </span>
+                  ),
+                },
+                {
+                  key: "kind",
+                  label: "Type",
+                  render: (a) => (
+                    <span style={a.done ? { opacity: 0.55 } : undefined}>
+                      <span className="pill sent">{a.kind}</span>
+                    </span>
+                  ),
+                },
+                {
+                  key: "body",
+                  label: "Details",
+                  render: (a) => (
+                    <span style={a.done ? { opacity: 0.55 } : undefined}>
+                      {a.body}
+                    </span>
+                  ),
+                },
+                {
+                  key: "due_date",
+                  label: "Follow-up",
+                  value: (a) => a.due_date ?? "",
+                  render: (a) => (
+                    <span
+                      className="muted"
+                      style={a.done ? { opacity: 0.55 } : undefined}
+                    >
+                      {a.due_date ? d10(a.due_date) : "—"}
+                    </span>
+                  ),
+                },
+                {
+                  key: "actions",
+                  label: "",
+                  value: () => "",
+                  render: (a) => (
+                    <>
+                      {!a.done && a.due_date && (
+                        <button
+                          type="button"
+                          className="secondary"
+                          style={{ marginTop: 0, padding: "4px 12px" }}
+                          onClick={() =>
+                            void act(() =>
+                              api(
+                                `/tenants/current/crm/activities/${a.id}/done`,
+                                { method: "POST" },
+                              ),
+                            )
+                          }
+                        >
+                          Done
+                        </button>
+                      )}
+                    </>
+                  ),
+                },
+              ]}
+            />
           </div>
         </>
       )}

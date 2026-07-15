@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, fmtKes0 } from "@/lib/api";
+import { DataTable } from "@/components/DataTable";
 
 interface HeadcountRow {
   department: string;
@@ -976,38 +977,40 @@ export default function HrPage() {
             <div className="card-head">
               <h3>All requests</h3>
             </div>
-            <div className="table-wrap">
-              {requests.length === 0 ? (
-                <p className="muted">No leave requests yet.</p>
-              ) : (
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Employee</th>
-                      <th>Policy</th>
-                      <th>Dates</th>
-                      <th className="num">Days</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {requests.map((r) => (
-                      <tr key={r.id}>
-                        <td>{r.full_name}</td>
-                        <td>{r.policy}</td>
-                        <td className="muted" style={{ whiteSpace: "nowrap" }}>
-                          {d10(r.start_date)} → {d10(r.end_date)}
-                        </td>
-                        <td className="num">{Number(r.days)}</td>
-                        <td>
-                          <span className={`pill ${r.status}`}>{r.status}</span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
+            <DataTable
+              rows={requests}
+              csvName="leave-requests"
+              searchKeys={["full_name", "policy", "status"]}
+              pageSizeDefault={10}
+              empty={<p className="muted">No leave requests yet.</p>}
+              columns={[
+                { key: "full_name", label: "Employee" },
+                { key: "policy", label: "Policy" },
+                {
+                  key: "start_date",
+                  label: "Dates",
+                  value: (r) => r.start_date ?? "",
+                  render: (r) => (
+                    <span className="muted" style={{ whiteSpace: "nowrap" }}>
+                      {d10(r.start_date)} → {d10(r.end_date)}
+                    </span>
+                  ),
+                },
+                {
+                  key: "days",
+                  label: "Days",
+                  num: true,
+                  value: (r) => Number(r.days),
+                },
+                {
+                  key: "status",
+                  label: "Status",
+                  render: (r) => (
+                    <span className={`pill ${r.status}`}>{r.status}</span>
+                  ),
+                },
+              ]}
+            />
           </div>
         </>
       )}

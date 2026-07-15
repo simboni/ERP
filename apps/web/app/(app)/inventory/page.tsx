@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { api, fmtKes, getTenantToken } from "@/lib/api";
+import { DataTable } from "@/components/DataTable";
 
 interface Item {
   id: string;
@@ -120,41 +121,73 @@ export default function InventoryPage() {
       </div>
 
       <div className="card">
-        {items.length === 0 ? (
-          <p className="muted">No items yet. Add your products above — sales will track stock and cost automatically.</p>
-        ) : (
-          <table>
-            <thead>
-              <tr><th>SKU</th><th>Name</th><th>Cost</th><th>Price</th><th>On hand</th><th>Receive stock</th></tr>
-            </thead>
-            <tbody>
-              {items.map((i) => (
-                <tr key={i.id}>
-                  <td>{i.sku}</td>
-                  <td>{i.name}</td>
-                  <td>{fmtKes(i.cost_cents)}</td>
-                  <td>{fmtKes(i.price_cents)}</td>
-                  <td><strong>{onHand(i.id)}</strong> {i.unit}</td>
-                  <td>
-                    <span className="row" style={{ gap: 6 }}>
-                      <input
-                        type="number"
-                        min="0.001"
-                        step="any"
-                        style={{ maxWidth: 90 }}
-                        value={receive[i.id] ?? ""}
-                        onChange={(e) => setReceive((s) => ({ ...s, [i.id]: e.target.value }))}
-                      />
-                      <button className="secondary" disabled={busy} onClick={() => void receiveStock(i.id)()}>
-                        Receive
-                      </button>
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <DataTable
+          rows={items}
+          csvName="inventory"
+          searchKeys={["sku", "name"]}
+          pageSizeDefault={25}
+          empty={
+            <p className="muted">
+              No items yet. Add your products above — sales will track stock
+              and cost automatically.
+            </p>
+          }
+          columns={[
+            { key: "sku", label: "SKU" },
+            { key: "name", label: "Name" },
+            {
+              key: "cost_cents",
+              label: "Cost",
+              num: true,
+              value: (i) => Number(i.cost_cents),
+              render: (i) => fmtKes(i.cost_cents),
+            },
+            {
+              key: "price_cents",
+              label: "Price",
+              num: true,
+              value: (i) => Number(i.price_cents),
+              render: (i) => fmtKes(i.price_cents),
+            },
+            {
+              key: "on_hand",
+              label: "On hand",
+              num: true,
+              value: (i) => onHand(i.id),
+              render: (i) => (
+                <>
+                  <strong>{onHand(i.id)}</strong> {i.unit}
+                </>
+              ),
+            },
+            {
+              key: "actions",
+              label: "Receive stock",
+              value: () => "",
+              render: (i) => (
+                <span className="row" style={{ gap: 6 }}>
+                  <input
+                    type="number"
+                    min="0.001"
+                    step="any"
+                    style={{ maxWidth: 90 }}
+                    value={receive[i.id] ?? ""}
+                    onChange={(e) =>
+                      setReceive((s) => ({ ...s, [i.id]: e.target.value }))
+                    }
+                  />
+                  <button
+                    className="secondary"
+                    disabled={busy}
+                    onClick={() => void receiveStock(i.id)()}
+                  >
+                    Receive
+                  </button>
+                </span>
+              ),
+            },
+          ]}
+        />
       </div>
     </>
   );

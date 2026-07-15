@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { api, fmtKes, getTenantToken } from "@/lib/api";
+import { DataTable } from "@/components/DataTable";
 
 interface Payment {
   id: string;
@@ -89,74 +90,114 @@ export default function PaymentsPage() {
         <>
           <h2>Needs matching ({unmatched.length})</h2>
           <div className="card">
-            <table>
-              <thead>
-                <tr>
-                  <th>Receipt</th><th>From</th><th>Ref</th><th>Amount</th><th>Match to</th><th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {unmatched.map((u) => (
-                  <tr key={u.id}>
-                    <td>{u.receipt_number}</td>
-                    <td>{u.msisdn}</td>
-                    <td>{u.account_ref || <span className="muted">none</span>}</td>
-                    <td>{fmtKes(u.amount_cents)}</td>
-                    <td>
+            <DataTable
+              rows={unmatched}
+              csvName="unmatched-payments"
+              searchKeys={["receipt_number", "msisdn", "account_ref"]}
+              pageSizeDefault={10}
+              columns={[
+                { key: "receipt_number", label: "Receipt" },
+                { key: "msisdn", label: "From" },
+                {
+                  key: "account_ref",
+                  label: "Ref",
+                  render: (u) =>
+                    u.account_ref || <span className="muted">none</span>,
+                },
+                {
+                  key: "amount_cents",
+                  label: "Amount",
+                  num: true,
+                  value: (u) => Number(u.amount_cents),
+                  render: (u) => fmtKes(u.amount_cents),
+                },
+                {
+                  key: "actions",
+                  label: "Match to",
+                  value: () => "",
+                  render: (u) => (
+                    <span className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
                       <select
                         value={pick[u.id] ?? ""}
-                        onChange={(e) => setPick((s) => ({ ...s, [u.id]: e.target.value }))}
+                        onChange={(e) =>
+                          setPick((s) => ({ ...s, [u.id]: e.target.value }))
+                        }
                       >
                         <option value="">Choose invoice…</option>
                         {openInvoices.map((i) => (
                           <option key={i.id} value={i.id}>
-                            #{i.invoice_no} {i.customer_name} — {fmtKes(i.total_cents)}
+                            #{i.invoice_no} {i.customer_name} —{" "}
+                            {fmtKes(i.total_cents)}
                           </option>
                         ))}
                       </select>
-                    </td>
-                    <td>
-                      <button disabled={busy || !pick[u.id]} onClick={() => void match(u.id)}>
+                      <button
+                        disabled={busy || !pick[u.id]}
+                        onClick={() => void match(u.id)}
+                      >
                         Match
                       </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </span>
+                  ),
+                },
+              ]}
+            />
           </div>
         </>
       )}
 
       <h2>All payments</h2>
       <div className="card">
-        {payments.length === 0 ? (
-          <p className="muted">
-            No payments yet. Register your paybill shortcode and M-Pesa
-            payments will reconcile themselves to open invoices.
-          </p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Receipt</th><th>Rail</th><th>Amount</th><th>Ref</th>
-                <th>State</th><th>Matched</th>
-              </tr>
-            </thead>
-            <tbody>
-              {payments.map((p) => (
-                <tr key={p.id}>
-                  <td>{p.receipt_number ?? <span className="muted">—</span>}</td>
-                  <td>{p.rail.replace("mpesa_", "M-Pesa ")}</td>
-                  <td>{fmtKes(p.amount_cents)}</td>
-                  <td>{p.account_ref}</td>
-                  <td><span className={`pill ${p.state === "confirmed" ? "paid" : ""}`}>{p.state}</span></td>
-                  <td>{p.invoice_id ? "✓" : ""}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <DataTable
+          rows={payments}
+          csvName="payments"
+          searchKeys={["receipt_number", "rail", "account_ref"]}
+          pageSizeDefault={25}
+          empty={
+            <p className="muted">
+              No payments yet. Register your paybill shortcode and M-Pesa
+              payments will reconcile themselves to open invoices.
+            </p>
+          }
+          columns={[
+            {
+              key: "receipt_number",
+              label: "Receipt",
+              value: (p) => p.receipt_number ?? "",
+              render: (p) =>
+                p.receipt_number ?? <span className="muted">—</span>,
+            },
+            {
+              key: "rail",
+              label: "Rail",
+              value: (p) => p.rail.replace("mpesa_", "M-Pesa "),
+            },
+            {
+              key: "amount_cents",
+              label: "Amount",
+              num: true,
+              value: (p) => Number(p.amount_cents),
+              render: (p) => fmtKes(p.amount_cents),
+            },
+            { key: "account_ref", label: "Ref" },
+            {
+              key: "state",
+              label: "State",
+              render: (p) => (
+                <span
+                  className={`pill ${p.state === "confirmed" ? "paid" : ""}`}
+                >
+                  {p.state}
+                </span>
+              ),
+            },
+            {
+              key: "invoice_id",
+              label: "Matched",
+              value: (p) => (p.invoice_id ? "✓" : ""),
+            },
+          ]}
+        />
       </div>
     </>
   );
