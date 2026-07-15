@@ -129,6 +129,12 @@ const NAV: NavSection[] = [
       { href: "/purchases", labelKey: "purchases", icon: "cart" },
       { href: "/suppliers", labelKey: "navSuppliers", icon: "truck" },
       { href: "/inventory", labelKey: "navInventory", icon: "box" },
+    ],
+  },
+  {
+    titleKey: "navHr",
+    items: [
+      { href: "/hr", labelKey: "navHrOverview", icon: "people" },
       { href: "/payroll", labelKey: "payroll", icon: "payroll" },
     ],
   },
