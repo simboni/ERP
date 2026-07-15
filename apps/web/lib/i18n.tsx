@@ -48,6 +48,8 @@ const DICT = {
     navSettings: "Settings",
     search: "Search",
     allStatuses: "All statuses",
+    navCustomers: "Customers",
+    navSuppliers: "Suppliers",
   },
   sw: {
     tagline: "Ankara za eTIMS · Ulinganisho wa M-Pesa · Hesabu safi",
@@ -88,6 +90,8 @@ const DICT = {
     navSettings: "Mipangilio",
     search: "Tafuta",
     allStatuses: "Hali zote",
+    navCustomers: "Wateja",
+    navSuppliers: "Wasambazaji",
   },
 } as const;
 

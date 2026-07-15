@@ -37,6 +37,50 @@ export class SalesExtrasController {
     private readonly audit: AuditService,
   ) {}
 
+  @Get("customers/overview")
+  async customersOverview(@TenantClaims() claims: TenantTokenClaims) {
+    return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const res = await client.query(
+        `SELECT c.id, c.name, c.kra_pin, c.phone, c.email,
+                count(inv.id) FILTER (WHERE inv.status IN ('issued','paid'))::int
+                  AS invoice_count,
+                coalesce(sum(inv.total_cents)
+                  FILTER (WHERE inv.status IN ('issued','paid')), 0)::bigint
+                  AS invoiced_cents,
+                coalesce(sum(inv.total_cents - coalesce(inv.amount_paid_cents, 0))
+                  FILTER (WHERE inv.status = 'issued'), 0)::bigint
+                  AS outstanding_cents,
+                max(inv.issue_date) AS last_invoice_date
+         FROM customers c
+         LEFT JOIN invoices inv ON inv.customer_id = c.id
+         GROUP BY c.id
+         ORDER BY c.name
+         LIMIT 500`,
+      );
+      return res.rows;
+    });
+  }
+
+  @Get("customers/:id/invoices")
+  async customerInvoices(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) customerId: string,
+  ) {
+    return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const res = await client.query(
+        `SELECT inv.id, inv.invoice_no, inv.status, inv.issue_date,
+                inv.due_date, inv.total_cents,
+                coalesce(inv.amount_paid_cents, 0)::bigint AS amount_paid_cents
+         FROM invoices inv
+         WHERE inv.customer_id = $1
+         ORDER BY inv.created_at DESC
+         LIMIT 200`,
+        [customerId],
+      );
+      return res.rows;
+    });
+  }
+
   @Post("quotes")
   @Roles(...SALES_ROLES)
   async createQuote(

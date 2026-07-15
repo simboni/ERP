@@ -26,12 +26,14 @@ const NAV: NavSection[] = [
       { href: "/quotes", labelKey: "navQuotes" },
       { href: "/invoices", labelKey: "invoices" },
       { href: "/payments", labelKey: "payments" },
+      { href: "/customers", labelKey: "navCustomers" },
     ],
   },
   {
     titleKey: "navOperations",
     items: [
       { href: "/purchases", labelKey: "purchases" },
+      { href: "/suppliers", labelKey: "navSuppliers" },
       { href: "/inventory", labelKey: "navInventory" },
       { href: "/payroll", labelKey: "payroll" },
     ],

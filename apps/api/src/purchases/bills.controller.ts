@@ -53,6 +53,30 @@ export class BillsController {
     });
   }
 
+  @Get("suppliers/overview")
+  async suppliersOverview(@TenantClaims() claims: TenantTokenClaims) {
+    return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const res = await client.query(
+        `SELECT s.id, s.name, s.kra_pin, s.phone, s.email,
+                count(b.id) FILTER (WHERE b.status IN ('approved','paid'))::int
+                  AS bill_count,
+                coalesce(sum(b.total_cents)
+                  FILTER (WHERE b.status IN ('approved','paid')), 0)::bigint
+                  AS billed_cents,
+                coalesce(sum(b.total_cents)
+                  FILTER (WHERE b.status = 'approved'), 0)::bigint
+                  AS unpaid_cents,
+                max(b.bill_date) AS last_bill_date
+         FROM suppliers s
+         LEFT JOIN bills b ON b.supplier_id = s.id
+         GROUP BY s.id
+         ORDER BY s.name
+         LIMIT 500`,
+      );
+      return res.rows;
+    });
+  }
+
   @Get("suppliers")
   async listSuppliers(@TenantClaims() claims: TenantTokenClaims) {
     return this.db.withTenant(claims.tid, claims.sub, async (client) => {
