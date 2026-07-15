@@ -29,11 +29,39 @@ async function preflightDb(): Promise<void> {
     await probe.end().catch(() => undefined);
     const reason = err instanceof Error ? err.message : String(err);
     if (process.env.ADMIN_DB_URL) {
+      // FORCE RLS binds table owners but NOT superusers/BYPASSRLS roles —
+      // if the admin role is one of those, this fallback disables tenant
+      // isolation entirely. Detect and say so truthfully.
+      let bypasses = false;
+      const admin = new Client({
+        connectionString: process.env.ADMIN_DB_URL,
+        connectionTimeoutMillis: 8000,
+      });
+      try {
+        await admin.connect();
+        const r = await admin.query(
+          `SELECT rolsuper OR rolbypassrls AS bypass
+           FROM pg_roles WHERE rolname = current_user`,
+        );
+        bypasses = Boolean(r.rows[0]?.bypass);
+      } catch {
+        // Unknown — treat as the dangerous case below.
+        bypasses = true;
+      } finally {
+        await admin.end().catch(() => undefined);
+      }
       console.error(
-        `WARNING: runtime DB role connection failed (${reason}); ` +
-          "falling back to the owner connection. Tenant isolation remains " +
-          "enforced by FORCE ROW LEVEL SECURITY, but provision jenga_app/" +
-          "jenga_worker (docs/deploy-render.md) to restore full separation.",
+        bypasses
+          ? `CRITICAL: runtime DB role connection failed (${reason}); ` +
+              "falling back to an owner connection that BYPASSES row level " +
+              "security. TENANT ISOLATION IS NOT ENFORCED until jenga_app/" +
+              "jenga_worker are provisioned (docs/deploy-render.md). Do not " +
+              "serve multiple tenants in this state."
+          : `WARNING: runtime DB role connection failed (${reason}); ` +
+              "falling back to the owner connection. Tenant isolation " +
+              "remains enforced by FORCE ROW LEVEL SECURITY, but provision " +
+              "jenga_app/jenga_worker (docs/deploy-render.md) to restore " +
+              "full separation.",
       );
       process.env.APP_DB_URL = process.env.ADMIN_DB_URL;
       process.env.WORKER_DB_URL = process.env.ADMIN_DB_URL;
