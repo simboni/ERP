@@ -6,6 +6,8 @@ import {
   api,
   clearTokens,
   getApiBase,
+  setRefreshToken,
+  setTenantId,
   setTenantToken,
   setUserToken,
 } from "@/lib/api";
@@ -54,6 +56,7 @@ export default function AuthPage() {
       body: { tenantId },
     });
     setTenantToken(res.accessToken);
+    setTenantId(tenantId);
     router.push("/dashboard");
   };
 
@@ -75,11 +78,15 @@ export default function AuthPage() {
           body: { email, password, fullName, tenantName, tenantSlug: slug },
         });
       }
-      const login = await api<{ accessToken: string }>("/auth/login", {
-        method: "POST",
-        body: { email, password },
-      });
+      const login = await api<{ accessToken: string; refreshToken?: string }>(
+        "/auth/login",
+        {
+          method: "POST",
+          body: { email, password },
+        },
+      );
       setUserToken(login.accessToken);
+      if (login.refreshToken) setRefreshToken(login.refreshToken);
       const me = await api<{ memberships: Membership[] }>("/auth/me");
       if (me.memberships.length === 1) {
         await selectTenant(me.memberships[0].tenantId);
