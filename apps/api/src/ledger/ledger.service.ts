@@ -168,6 +168,8 @@ export const DEFAULT_ACCOUNTS: {
   { code: "1100", name: "Accounts Receivable", type: "asset", system: true },
   { code: "1200", name: "Inventory", type: "asset" },
   { code: "1300", name: "Input VAT Receivable", type: "asset", system: true },
+  // Contra-asset: carries a credit balance (monthly depreciation credits).
+  { code: "1500", name: "Accumulated Depreciation", type: "asset", system: true },
   { code: "2100", name: "Accounts Payable", type: "liability", system: true },
   { code: "2200", name: "VAT Payable", type: "liability", system: true },
   { code: "2300", name: "Statutory Payables", type: "liability", system: true },
@@ -177,6 +179,7 @@ export const DEFAULT_ACCOUNTS: {
   { code: "5000", name: "Cost of Goods Sold", type: "expense" },
   { code: "6000", name: "Operating Expenses", type: "expense" },
   { code: "6100", name: "Salaries & Wages", type: "expense", system: true },
+  { code: "6200", name: "Depreciation Expense", type: "expense", system: true },
 ];
 
 export async function seedDefaultAccounts(

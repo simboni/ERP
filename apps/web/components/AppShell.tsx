@@ -159,6 +159,7 @@ const NAV: NavSection[] = [
     titleKey: "navCompliance",
     items: [
       { href: "/vat", labelKey: "vat", icon: "shield" },
+      { href: "/finance", labelKey: "navFinance", icon: "chart" },
       { href: "/reports", labelKey: "navReports", icon: "chart" },
     ],
   },

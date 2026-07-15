@@ -8,6 +8,8 @@ import { ComplianceService } from "./compliance/compliance.service";
 import { ExportController } from "./compliance/export.controller";
 import { loadConfig } from "./config";
 import { DbService } from "./db/db.service";
+import { FinanceController } from "./finance/finance.controller";
+import { FinanceService } from "./finance/finance.service";
 import { FiscalController } from "./fiscal/fiscal.controller";
 import { FISCAL_PROVIDER, FiscalService } from "./fiscal/fiscal.service";
 import { EtimsOscuProvider } from "./fiscal/oscu.provider";
@@ -66,6 +68,7 @@ import { TenantsController } from "./tenants/tenants.controller";
     TenantsController,
     DashboardController,
     ReportsController,
+    FinanceController,
     DemoDataController,
     HrController,
     CrmController,
@@ -94,6 +97,7 @@ import { TenantsController } from "./tenants/tenants.controller";
     FiscalService,
     LedgerService,
     InvoicesService,
+    FinanceService,
     QuotesService,
     PaymentsService,
     PayrollService,
