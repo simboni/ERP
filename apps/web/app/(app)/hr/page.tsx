@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, fmtKes0 } from "@/lib/api";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { DataTable } from "@/components/DataTable";
+import { SearchSelect } from "@/components/SearchSelect";
 
 interface HeadcountRow {
   department: string;
@@ -1114,14 +1115,15 @@ export default function HrPage() {
                 <h3>Request leave</h3>
               </div>
               <label>Employee</label>
-              <select value={reqEmp} onChange={(e) => setReqEmp(e.target.value)}>
-                <option value="">Select…</option>
-                {activeEmployees.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.full_name}
-                  </option>
-                ))}
-              </select>
+              <SearchSelect
+                options={activeEmployees.map((e) => ({
+                  id: e.id,
+                  label: e.full_name,
+                }))}
+                value={reqEmp}
+                onChange={setReqEmp}
+                placeholder="Search employees…"
+              />
               <label>Policy</label>
               <select value={reqPol} onChange={(e) => setReqPol(e.target.value)}>
                 <option value="">Select…</option>
@@ -1429,17 +1431,15 @@ export default function HrPage() {
                 <h3>Employee notes</h3>
               </div>
               <label>Employee</label>
-              <select
+              <SearchSelect
+                options={activeEmployees.map((e) => ({
+                  id: e.id,
+                  label: e.full_name,
+                }))}
                 value={noteEmp}
-                onChange={(e) => setNoteEmp(e.target.value)}
-              >
-                <option value="">Select…</option>
-                {activeEmployees.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.full_name}
-                  </option>
-                ))}
-              </select>
+                onChange={setNoteEmp}
+                placeholder="Search employees…"
+              />
               {noteEmp && (
                 <>
                   {notes.length === 0 ? (

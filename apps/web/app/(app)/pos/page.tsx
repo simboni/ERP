@@ -131,12 +131,47 @@ export default function PosPage() {
     );
   };
 
-  const totalCents = cart.reduce(
+  // Mirror the server's pricing: catalog prices are net, VAT per line on
+  // top (invoices.service rounds per line), so the button charges exactly
+  // what the fiscalized invoice will say.
+  const subtotalCents = cart.reduce(
     (s, l) => s + Number(l.item.price_cents) * l.quantity,
     0,
   );
+  const vatCents = cart.reduce(
+    (s, l) =>
+      s +
+      Math.round(
+        Number(l.item.price_cents) *
+          l.quantity *
+          (l.item.vat_rate === "0.16" ? 0.16 : 0),
+      ),
+    0,
+  );
+  const totalCents = subtotalCents + vatCents;
   const tenderedCents = Math.round(Number(tendered || 0) * 100);
   const changePreview = tenderedCents - totalCents;
+  // Sensible quick-tender denominations for the drawer.
+  const tenderChips = useMemo(() => {
+    if (totalCents <= 0) return [] as number[];
+    const exact = Math.ceil(totalCents / 100) * 100;
+    const opts = [50, 100, 200, 500, 1000].map(
+      (n) => Math.ceil(totalCents / (n * 100)) * n * 100,
+    );
+    return [...new Set([exact, ...opts])].filter((v) => v >= totalCents).slice(0, 4);
+  }, [totalCents]);
+
+  const AVA_COLORS = ["#dcefe2", "#e5e5f7", "#fde6e9", "#fff2d9", "#dff0f7"];
+  const AVA_INK = ["#0d7a3f", "#4a4ac2", "#c2334d", "#8a5a00", "#0b6b8a"];
+  const avaIdx = (name: string): number =>
+    name.split("").reduce((s, c) => s + c.charCodeAt(0), 0) % AVA_COLORS.length;
+  const itemInitials = (name: string): string =>
+    name
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((w) => w[0] ?? "")
+      .join("")
+      .toUpperCase();
 
   const charge = async (): Promise<void> => {
     setBusy(true);
@@ -307,85 +342,141 @@ export default function PosPage() {
       {tab === "sell" && (
       <div className="pos-grid">
         <div>
-          <input
-            placeholder="Search items or SKU…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
+          <div className="pos-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+              <circle cx="11" cy="11" r="6.5" />
+              <path d="m16 16 5 5" />
+            </svg>
+            <input
+              placeholder="Search items or SKU…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+            {q && (
+              <button type="button" className="pos-search-clear" onClick={() => setQ("")}>
+                ✕
+              </button>
+            )}
+          </div>
           <div className="pos-items">
             {filtered.map((i) => {
               const qty = stock[i.id];
               const out = i.track_stock && qty !== undefined && qty <= 0;
+              const lowStock =
+                !out && i.track_stock && qty !== undefined && qty <= 5;
+              const inCart = cart.find((l) => l.item.id === i.id)?.quantity;
+              const c = avaIdx(i.name);
               return (
                 <button
                   key={i.id}
                   type="button"
-                  className="pos-item"
+                  className={`pos-item${inCart ? " in-cart" : ""}`}
                   disabled={out}
                   onClick={() => add(i)}
                 >
-                  <span className="pos-item-name">{i.name}</span>
-                  <span className="kes">{fmtKes(i.price_cents)}</span>
-                  <span className="muted">
-                    {out
-                      ? "out of stock"
-                      : i.track_stock && qty !== undefined
-                        ? `${qty} left`
-                        : i.sku}
+                  <span className="pos-item-top">
+                    <span
+                      className="pos-ava"
+                      style={{ background: AVA_COLORS[c], color: AVA_INK[c] }}
+                    >
+                      {itemInitials(i.name)}
+                    </span>
+                    {inCart ? (
+                      <span className="pos-incart-badge">{inCart}</span>
+                    ) : out ? (
+                      <span className="pos-stock out">out</span>
+                    ) : lowStock ? (
+                      <span className="pos-stock low">{qty} left</span>
+                    ) : i.track_stock && qty !== undefined ? (
+                      <span className="pos-stock">{qty}</span>
+                    ) : null}
                   </span>
+                  <span className="pos-item-name">{i.name}</span>
+                  <span className="pos-item-price">{fmtKes(i.price_cents)}</span>
                 </button>
               );
             })}
             {filtered.length === 0 && (
-              <p className="muted">No items match — add items in Inventory.</p>
+              <p className="muted">No items match — add them on the Items tab.</p>
             )}
           </div>
         </div>
 
         <div className="card pos-cart">
-          <div className="card-head">
-            <h3>Cart ({cart.length})</h3>
+          <div className="pos-cart-head">
+            <h3>
+              Current sale
+              {cart.length > 0 && (
+                <span className="pos-count">
+                  {cart.reduce((s, l) => s + l.quantity, 0)}
+                </span>
+              )}
+            </h3>
+            {cart.length > 0 && (
+              <button
+                type="button"
+                className="pos-clear"
+                onClick={() => setCart([])}
+              >
+                Clear
+              </button>
+            )}
           </div>
           {cart.length === 0 ? (
-            <p className="muted">Tap items to add them.</p>
+            <div className="pos-empty">
+              <span>🧺</span>
+              <p className="muted">Tap items to start a sale.</p>
+            </div>
           ) : (
-            <table>
-              <tbody>
-                {cart.map((l) => (
-                  <tr key={l.item.id}>
-                    <td>
-                      {l.item.name}
-                      <br />
-                      <span className="muted">{fmtKes(l.item.price_cents)}</span>
-                    </td>
-                    <td style={{ whiteSpace: "nowrap" }}>
-                      <button
-                        type="button"
-                        className="secondary dt-btn"
-                        onClick={() => setQty(l.item.id, l.quantity - 1)}
-                      >
-                        −
-                      </button>{" "}
-                      {l.quantity}{" "}
-                      <button
-                        type="button"
-                        className="secondary dt-btn"
-                        onClick={() => setQty(l.item.id, l.quantity + 1)}
-                      >
-                        +
-                      </button>
-                    </td>
-                    <td className="num">
-                      {fmtKes(Number(l.item.price_cents) * l.quantity)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="cart-lines">
+              {cart.map((l) => (
+                <div className="cart-line" key={l.item.id}>
+                  <div className="cart-line-info">
+                    <span className="cart-line-name">{l.item.name}</span>
+                    <span className="muted">
+                      {fmtKes(l.item.price_cents)} each
+                    </span>
+                  </div>
+                  <div className="stepper">
+                    <button
+                      type="button"
+                      className="step-btn"
+                      aria-label="Less"
+                      onClick={() => setQty(l.item.id, l.quantity - 1)}
+                    >
+                      −
+                    </button>
+                    <span className="step-qty">{l.quantity}</span>
+                    <button
+                      type="button"
+                      className="step-btn"
+                      aria-label="More"
+                      onClick={() => setQty(l.item.id, l.quantity + 1)}
+                    >
+                      +
+                    </button>
+                  </div>
+                  <span className="cart-line-total kes">
+                    {fmtKes(Number(l.item.price_cents) * l.quantity)}
+                  </span>
+                </div>
+              ))}
+            </div>
           )}
-          <div className="pos-total">
-            <span>Total</span>
-            <span className="stat">{fmtKes(totalCents)}</span>
+
+          <div className="pos-summary">
+            <div className="pos-sum-row">
+              <span className="muted">Subtotal</span>
+              <span>{fmtKes(subtotalCents)}</span>
+            </div>
+            <div className="pos-sum-row">
+              <span className="muted">VAT</span>
+              <span>{fmtKes(vatCents)}</span>
+            </div>
+            <div className="pos-sum-row pos-sum-total">
+              <span>Total</span>
+              <span>{fmtKes(totalCents)}</span>
+            </div>
           </div>
 
           {branches.length > 1 && (
@@ -404,20 +495,18 @@ export default function PosPage() {
             </>
           )}
 
-          <div className="tabs" style={{ width: "100%" }}>
+          <div className="pos-pay">
             <button
               type="button"
-              className={payMethod === "cash" ? "tab active" : "tab"}
+              className={payMethod === "cash" ? "active" : ""}
               onClick={() => setPayMethod("cash")}
-              style={{ flex: 1 }}
             >
               💵 Cash
             </button>
             <button
               type="button"
-              className={payMethod === "mpesa_stk" ? "tab active" : "tab"}
+              className={payMethod === "mpesa_stk" ? "active" : ""}
               onClick={() => setPayMethod("mpesa_stk")}
-              style={{ flex: 1 }}
             >
               📱 M-Pesa
             </button>
@@ -432,11 +521,31 @@ export default function PosPage() {
                 onChange={(e) => setTendered(e.target.value)}
                 placeholder={String(Math.ceil(totalCents / 100))}
               />
-              {tendered && changePreview >= 0 && (
-                <p className="muted">Change: {fmtKes(changePreview)}</p>
+              {tenderChips.length > 0 && (
+                <div className="tender-chips">
+                  {tenderChips.map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      className={
+                        tenderedCents === v ? "tender-chip active" : "tender-chip"
+                      }
+                      onClick={() => setTendered(String(v / 100))}
+                    >
+                      {v % 100 === 0 ? v / 100 : (v / 100).toFixed(2)}
+                    </button>
+                  ))}
+                </div>
               )}
-              {tendered && changePreview < 0 && (
-                <p className="err">Short by {fmtKes(-changePreview)}</p>
+              {!!tendered && changePreview >= 0 && (
+                <div className="pos-change">
+                  Change <strong>{fmtKes(changePreview)}</strong>
+                </div>
+              )}
+              {!!tendered && changePreview < 0 && (
+                <div className="pos-change short">
+                  Short by <strong>{fmtKes(-changePreview)}</strong>
+                </div>
               )}
             </>
           ) : (
@@ -451,6 +560,7 @@ export default function PosPage() {
           )}
           {stkNote && <p className="muted">{stkNote}</p>}
           <button
+            className="pos-charge"
             disabled={
               busy ||
               cart.length === 0 ||
@@ -459,7 +569,6 @@ export default function PosPage() {
               (payMethod === "cash" && !!tendered && changePreview < 0)
             }
             onClick={() => void charge()}
-            style={{ width: "100%", padding: "13px", fontSize: "1.05rem" }}
           >
             {busy ? "Processing…" : `Charge ${fmtKes(totalCents)}`}
           </button>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, fmtKes } from "@/lib/api";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { DataTable } from "@/components/DataTable";
+import { SearchSelect } from "@/components/SearchSelect";
 
 interface Supplier {
   id: string;
@@ -265,16 +266,12 @@ export default function PurchasingPage() {
               <div>
                 <label>Supplier</label>
                 {suppliers.length ? (
-                  <select
+                  <SearchSelect
+                    options={suppliers.map((sp) => ({ id: sp.id, label: sp.name }))}
                     value={supplierId}
-                    onChange={(e) => setSupplierId(e.target.value)}
-                  >
-                    {suppliers.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setSupplierId}
+                    placeholder="Search suppliers…"
+                  />
                 ) : (
                   <input
                     placeholder="Supplier name"
@@ -598,17 +595,12 @@ export default function PurchasingPage() {
           <div className="row">
             <div>
               <label>Supplier</label>
-              <select
+              <SearchSelect
+                options={suppliers.map((sp) => ({ id: sp.id, label: sp.name }))}
                 value={supplierId}
-                onChange={(e) => setSupplierId(e.target.value)}
-              >
-                <option value="">Select…</option>
-                {suppliers.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setSupplierId}
+                placeholder="Search suppliers…"
+              />
             </div>
             <div>
               <label>Expected delivery</label>
@@ -624,16 +616,21 @@ export default function PurchasingPage() {
             <div className="row" key={idx} style={{ alignItems: "flex-end" }}>
               <div style={{ flex: 2 }}>
                 <label>Item</label>
-                <select
+                <SearchSelect
+                  options={items.map((i) => ({
+                    id: i.id,
+                    label: i.name,
+                    sub: i.sku,
+                  }))}
                   value={l.itemId}
-                  onChange={(e) => {
-                    const item = items.find((i) => i.id === e.target.value);
+                  onChange={(id) => {
+                    const item = items.find((i) => i.id === id);
                     setLines((ls) =>
                       ls.map((x, i) =>
                         i === idx
                           ? {
                               ...x,
-                              itemId: e.target.value,
+                              itemId: id,
                               costKes: item
                                 ? String(Number(item.cost_cents) / 100)
                                 : x.costKes,
@@ -642,14 +639,8 @@ export default function PurchasingPage() {
                       ),
                     );
                   }}
-                >
-                  <option value="">Select…</option>
-                  {items.map((i) => (
-                    <option key={i.id} value={i.id}>
-                      {i.sku} — {i.name}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Search items…"
+                />
               </div>
               <div>
                 <label>Qty</label>

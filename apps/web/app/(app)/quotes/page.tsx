@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { api, fmtKes, getTenantToken } from "@/lib/api";
 import { DataTable } from "@/components/DataTable";
+import { SearchSelect } from "@/components/SearchSelect";
 
 interface Quote {
   id: string;
@@ -123,11 +124,12 @@ export default function QuotesPage() {
           <div>
             <label>Customer</label>
             {customers.length ? (
-              <select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <SearchSelect
+                options={customers.map((c) => ({ id: c.id, label: c.name }))}
+                value={customerId}
+                onChange={setCustomerId}
+                placeholder="Search customers…"
+              />
             ) : (
               <input placeholder="Customer name" value={newCustomer} onChange={(e) => setNewCustomer(e.target.value)} />
             )}

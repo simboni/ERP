@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api, fmtKes0 } from "@/lib/api";
 import { DataTable } from "@/components/DataTable";
+import { SearchSelect } from "@/components/SearchSelect";
 
 interface Contact {
   id: string;
@@ -140,18 +141,16 @@ export default function CrmPage() {
             <div className="row">
               <div>
                 <label>Contact</label>
-                <select
+                <SearchSelect
+                  options={contacts.map((c) => ({
+                    id: c.id,
+                    label: c.name,
+                    sub: c.company ?? undefined,
+                  }))}
                   value={dContact}
-                  onChange={(e) => setDContact(e.target.value)}
-                >
-                  <option value="">Select…</option>
-                  {contacts.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                      {c.company ? ` (${c.company})` : ""}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setDContact}
+                  placeholder="Search contacts…"
+                />
               </div>
               <div>
                 <label>Deal title</label>
@@ -479,17 +478,12 @@ export default function CrmPage() {
             <div className="row">
               <div>
                 <label>Contact</label>
-                <select
+                <SearchSelect
+                  options={contacts.map((c) => ({ id: c.id, label: c.name }))}
                   value={aContact}
-                  onChange={(e) => setAContact(e.target.value)}
-                >
-                  <option value="">Select…</option>
-                  {contacts.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setAContact}
+                  placeholder="Search contacts…"
+                />
               </div>
               <div>
                 <label>Type</label>
