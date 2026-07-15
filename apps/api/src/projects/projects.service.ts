@@ -14,6 +14,34 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 export const PROJECT_STATUSES = ["active", "completed", "archived"] as const;
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 
+export const TASK_STATUSES = [
+  "todo",
+  "in_progress",
+  "blocked",
+  "done",
+] as const;
+export type TaskStatus = (typeof TASK_STATUSES)[number];
+export const TASK_PRIORITIES = ["low", "medium", "high"] as const;
+export type TaskPriority = (typeof TASK_PRIORITIES)[number];
+export const MILESTONE_STATUSES = ["open", "reached"] as const;
+
+/** Estimate hours: non-negative, at most 2dp, capped so a typo can't overflow. */
+function optionalEstimate(value: unknown): number | null {
+  if (value === undefined || value === null || value === "") return null;
+  const h = Number(value);
+  if (!Number.isFinite(h) || h < 0 || h > 99999 || Math.round(h * 100) / 100 !== h) {
+    throw new BadRequestException(
+      "estimateHours must be 0 or more with at most 2 decimals",
+    );
+  }
+  return h;
+}
+
+function optionalDate(value: unknown, field: string): string | null {
+  if (value === undefined || value === null || value === "") return null;
+  return requireDate(value, field);
+}
+
 /** Max invoice-line description length (KRA-friendly, keeps PDFs tidy). */
 const DESC_MAX = 180;
 
@@ -72,6 +100,10 @@ export class ProjectsService {
       customerId?: string | null;
       budgetCents?: number | null;
       hourlyRateCents?: number | null;
+      description?: string;
+      startDate?: string | null;
+      endDate?: string | null;
+      managerEmployeeId?: string | null;
     },
   ) {
     const name = args.name?.trim();
@@ -79,12 +111,32 @@ export class ProjectsService {
     const budget = optionalCents(args.budgetCents, "budgetCents");
     const rate = optionalCents(args.hourlyRateCents, "hourlyRateCents");
     if (args.customerId) await this.requireCustomer(client, args.customerId);
+    const startDate = optionalDate(args.startDate, "startDate");
+    const endDate = optionalDate(args.endDate, "endDate");
+    let manager: string | null = null;
+    if (args.managerEmployeeId) {
+      manager = args.managerEmployeeId;
+      await this.requireEmployee(client, manager);
+    }
     const res = await client.query(
       `INSERT INTO projects
-         (tenant_id, customer_id, name, budget_cents, hourly_rate_cents, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, customer_id, name, status, budget_cents, hourly_rate_cents, created_at`,
-      [args.tenantId, args.customerId ?? null, name, budget, rate, args.userId],
+         (tenant_id, customer_id, name, budget_cents, hourly_rate_cents,
+          description, start_date, end_date, manager_employee_id, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING id, customer_id, name, status, budget_cents, hourly_rate_cents,
+                 description, start_date, end_date, manager_employee_id, created_at`,
+      [
+        args.tenantId,
+        args.customerId ?? null,
+        name,
+        budget,
+        rate,
+        args.description?.trim() ?? "",
+        startDate,
+        endDate,
+        manager,
+        args.userId,
+      ],
     );
     await this.audit.record(client, {
       tenantId: args.tenantId,
@@ -137,9 +189,12 @@ export class ProjectsService {
     const p = await client.query(
       `SELECT p.id, p.name, p.status, p.customer_id, c.name AS customer_name,
               p.budget_cents::bigint AS budget_cents,
-              p.hourly_rate_cents::bigint AS hourly_rate_cents, p.created_at
+              p.hourly_rate_cents::bigint AS hourly_rate_cents,
+              p.description, p.start_date, p.end_date,
+              p.manager_employee_id, m.full_name AS manager_name, p.created_at
        FROM projects p
        LEFT JOIN customers c ON c.id = p.customer_id
+       LEFT JOIN employees m ON m.id = p.manager_employee_id
        WHERE p.id = $1`,
       [projectId],
     );
@@ -162,10 +217,15 @@ export class ProjectsService {
       status?: string;
       budgetCents?: number | null;
       hourlyRateCents?: number | null;
+      description?: string;
+      startDate?: string | null;
+      endDate?: string | null;
+      managerEmployeeId?: string | null;
     },
   ) {
     const cur = await client.query(
-      `SELECT id, name, customer_id, status, budget_cents, hourly_rate_cents
+      `SELECT id, name, customer_id, status, budget_cents, hourly_rate_cents,
+              description, start_date, end_date, manager_employee_id
        FROM projects WHERE id = $1 FOR UPDATE`,
       [args.projectId],
     );
@@ -195,14 +255,42 @@ export class ProjectsService {
       args.hourlyRateCents === undefined
         ? row.hourly_rate_cents
         : optionalCents(args.hourlyRateCents, "hourlyRateCents");
+    const description =
+      args.description === undefined ? row.description : args.description.trim();
+    const startDate =
+      args.startDate === undefined
+        ? (row.start_date === null ? null : isoDate(row.start_date))
+        : optionalDate(args.startDate, "startDate");
+    const endDate =
+      args.endDate === undefined
+        ? (row.end_date === null ? null : isoDate(row.end_date))
+        : optionalDate(args.endDate, "endDate");
+    let manager: string | null = row.manager_employee_id;
+    if (args.managerEmployeeId !== undefined) {
+      manager = args.managerEmployeeId || null;
+      if (manager) await this.requireEmployee(client, manager);
+    }
 
     const res = await client.query(
       `UPDATE projects
        SET name = $2, customer_id = $3, status = $4,
-           budget_cents = $5, hourly_rate_cents = $6
+           budget_cents = $5, hourly_rate_cents = $6, description = $7,
+           start_date = $8, end_date = $9, manager_employee_id = $10
        WHERE id = $1
-       RETURNING id, customer_id, name, status, budget_cents, hourly_rate_cents`,
-      [args.projectId, name, customerId, status, budget, rate],
+       RETURNING id, customer_id, name, status, budget_cents, hourly_rate_cents,
+                 description, start_date, end_date, manager_employee_id`,
+      [
+        args.projectId,
+        name,
+        customerId,
+        status,
+        budget,
+        rate,
+        description,
+        startDate,
+        endDate,
+        manager,
+      ],
     );
     await this.audit.record(client, {
       tenantId: args.tenantId,
@@ -719,7 +807,424 @@ export class ProjectsService {
     };
   }
 
+  // ---- Tasks -----------------------------------------------------------------
+
+  async listTasks(client: PoolClient, projectId: string) {
+    await this.requireProject(client, projectId);
+    const res = await client.query(
+      `SELECT tk.id, tk.project_id, tk.title, tk.description, tk.status,
+              tk.priority, tk.assignee_employee_id, e.full_name AS assignee_name,
+              tk.due_date, tk.estimate_hours::numeric AS estimate_hours,
+              tk.sort_order, tk.completed_at, tk.created_at
+       FROM project_tasks tk
+       LEFT JOIN employees e ON e.id = tk.assignee_employee_id
+       WHERE tk.project_id = $1
+       ORDER BY tk.status, tk.sort_order, tk.created_at
+       LIMIT 1000`,
+      [projectId],
+    );
+    return res.rows;
+  }
+
+  async createTask(
+    client: PoolClient,
+    args: {
+      tenantId: string;
+      userId: string;
+      projectId: string;
+      title: string;
+      description?: string;
+      status?: string;
+      priority?: string;
+      assigneeEmployeeId?: string | null;
+      dueDate?: string | null;
+      estimateHours?: number | null;
+      sortOrder?: number;
+    },
+  ) {
+    await this.requireProject(client, args.projectId);
+    const title = args.title?.trim();
+    if (!title) throw new BadRequestException("title is required");
+    const status = this.requireTaskStatus(args.status ?? "todo");
+    const priority = this.requireTaskPriority(args.priority ?? "medium");
+    const dueDate = optionalDate(args.dueDate, "dueDate");
+    const estimate = optionalEstimate(args.estimateHours);
+    let assignee: string | null = null;
+    if (args.assigneeEmployeeId) {
+      assignee = args.assigneeEmployeeId;
+      await this.requireEmployee(client, assignee);
+    }
+    const sortOrder = Number.isInteger(args.sortOrder) ? args.sortOrder! : 0;
+    const res = await client.query(
+      `INSERT INTO project_tasks
+         (tenant_id, project_id, title, description, status, priority,
+          assignee_employee_id, due_date, estimate_hours, sort_order,
+          created_by, completed_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
+               CASE WHEN $5 = 'done' THEN now() ELSE NULL END)
+       RETURNING id, project_id, title, description, status, priority,
+                 assignee_employee_id, due_date, estimate_hours::numeric AS estimate_hours,
+                 sort_order, completed_at, created_at`,
+      [
+        args.tenantId,
+        args.projectId,
+        title,
+        args.description?.trim() ?? "",
+        status,
+        priority,
+        assignee,
+        dueDate,
+        estimate,
+        sortOrder,
+        args.userId,
+      ],
+    );
+    await this.audit.record(client, {
+      tenantId: args.tenantId,
+      actorUserId: args.userId,
+      action: "project.task_created",
+      entityType: "project_task",
+      entityId: res.rows[0].id,
+      payload: { projectId: args.projectId, title },
+    });
+    return res.rows[0];
+  }
+
+  /**
+   * Patch a task; every field coalesces (undefined leaves it as-is). Moving
+   * status to 'done' stamps completed_at; moving it off 'done' clears it.
+   */
+  async updateTask(
+    client: PoolClient,
+    args: {
+      tenantId: string;
+      userId: string;
+      projectId: string;
+      taskId: string;
+      title?: string;
+      description?: string;
+      status?: string;
+      priority?: string;
+      assigneeEmployeeId?: string | null;
+      dueDate?: string | null;
+      estimateHours?: number | null;
+      sortOrder?: number;
+    },
+  ) {
+    const cur = await client.query(
+      `SELECT id, title, description, status, priority, assignee_employee_id,
+              due_date, estimate_hours, sort_order, completed_at
+       FROM project_tasks WHERE id = $1 AND project_id = $2 FOR UPDATE`,
+      [args.taskId, args.projectId],
+    );
+    if (!cur.rows[0]) throw new NotFoundException("Task not found");
+    const row = cur.rows[0];
+
+    const title = args.title === undefined ? row.title : args.title.trim();
+    if (!title) throw new BadRequestException("title cannot be empty");
+    const description =
+      args.description === undefined ? row.description : args.description.trim();
+    const status =
+      args.status === undefined
+        ? (row.status as TaskStatus)
+        : this.requireTaskStatus(args.status);
+    const priority =
+      args.priority === undefined
+        ? (row.priority as TaskPriority)
+        : this.requireTaskPriority(args.priority);
+    let assignee: string | null = row.assignee_employee_id;
+    if (args.assigneeEmployeeId !== undefined) {
+      assignee = args.assigneeEmployeeId || null;
+      if (assignee) await this.requireEmployee(client, assignee);
+    }
+    const dueDate =
+      args.dueDate === undefined
+        ? (row.due_date === null ? null : isoDate(row.due_date))
+        : optionalDate(args.dueDate, "dueDate");
+    const estimate =
+      args.estimateHours === undefined
+        ? (row.estimate_hours === null ? null : Number(row.estimate_hours))
+        : optionalEstimate(args.estimateHours);
+    const sortOrder = Number.isInteger(args.sortOrder)
+      ? args.sortOrder!
+      : row.sort_order;
+
+    const res = await client.query(
+      `UPDATE project_tasks
+       SET title = $2, description = $3, status = $4, priority = $5,
+           assignee_employee_id = $6, due_date = $7, estimate_hours = $8,
+           sort_order = $9,
+           completed_at = CASE
+             WHEN $4 = 'done' AND completed_at IS NULL THEN now()
+             WHEN $4 <> 'done' THEN NULL
+             ELSE completed_at END
+       WHERE id = $1
+       RETURNING id, project_id, title, description, status, priority,
+                 assignee_employee_id, due_date,
+                 estimate_hours::numeric AS estimate_hours, sort_order,
+                 completed_at, created_at`,
+      [
+        args.taskId,
+        title,
+        description,
+        status,
+        priority,
+        assignee,
+        dueDate,
+        estimate,
+        sortOrder,
+      ],
+    );
+    return res.rows[0];
+  }
+
+  async deleteTask(
+    client: PoolClient,
+    args: { tenantId: string; userId: string; projectId: string; taskId: string },
+  ): Promise<{ deleted: true }> {
+    const cur = await client.query(
+      "SELECT id FROM project_tasks WHERE id = $1 AND project_id = $2 FOR UPDATE",
+      [args.taskId, args.projectId],
+    );
+    if (!cur.rows[0]) throw new NotFoundException("Task not found");
+    await client.query("DELETE FROM project_tasks WHERE id = $1", [args.taskId]);
+    return { deleted: true };
+  }
+
+  /**
+   * Cross-project task list ("my work"): every task in the tenant, optionally
+   * filtered by assignee employee and/or status, carrying its project name so
+   * the caller can group by status without a second round-trip.
+   */
+  async listMyTasks(
+    client: PoolClient,
+    args: { assigneeEmployeeId?: string | null; status?: string | null },
+  ) {
+    const where: string[] = [];
+    const params: unknown[] = [];
+    if (args.assigneeEmployeeId) {
+      params.push(args.assigneeEmployeeId);
+      where.push(`tk.assignee_employee_id = $${params.length}`);
+    }
+    if (args.status) {
+      const status = this.requireTaskStatus(args.status);
+      params.push(status);
+      where.push(`tk.status = $${params.length}`);
+    }
+    const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
+    const res = await client.query(
+      `SELECT tk.id, tk.project_id, p.name AS project_name, tk.title,
+              tk.status, tk.priority, tk.assignee_employee_id,
+              e.full_name AS assignee_name, tk.due_date,
+              tk.estimate_hours::numeric AS estimate_hours, tk.completed_at
+       FROM project_tasks tk
+       JOIN projects p ON p.id = tk.project_id
+       LEFT JOIN employees e ON e.id = tk.assignee_employee_id
+       ${clause}
+       ORDER BY (tk.status = 'done'),
+                (tk.due_date IS NULL), tk.due_date,
+                CASE tk.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
+                p.name
+       LIMIT 500`,
+      params,
+    );
+    return res.rows;
+  }
+
+  // ---- Milestones ------------------------------------------------------------
+
+  async listMilestones(client: PoolClient, projectId: string) {
+    await this.requireProject(client, projectId);
+    const res = await client.query(
+      `SELECT id, project_id, name, due_date, status, reached_at, created_at
+       FROM project_milestones
+       WHERE project_id = $1
+       ORDER BY (due_date IS NULL), due_date, created_at
+       LIMIT 500`,
+      [projectId],
+    );
+    return res.rows;
+  }
+
+  async createMilestone(
+    client: PoolClient,
+    args: {
+      tenantId: string;
+      userId: string;
+      projectId: string;
+      name: string;
+      dueDate?: string | null;
+    },
+  ) {
+    await this.requireProject(client, args.projectId);
+    const name = args.name?.trim();
+    if (!name) throw new BadRequestException("name is required");
+    const dueDate = optionalDate(args.dueDate, "dueDate");
+    const res = await client.query(
+      `INSERT INTO project_milestones
+         (tenant_id, project_id, name, due_date, created_by)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, project_id, name, due_date, status, reached_at, created_at`,
+      [args.tenantId, args.projectId, name, dueDate, args.userId],
+    );
+    await this.audit.record(client, {
+      tenantId: args.tenantId,
+      actorUserId: args.userId,
+      action: "project.milestone_created",
+      entityType: "project_milestone",
+      entityId: res.rows[0].id,
+      payload: { projectId: args.projectId, name },
+    });
+    return res.rows[0];
+  }
+
+  /** Patch a milestone; marking status 'reached' stamps reached_at, 'open' clears it. */
+  async updateMilestone(
+    client: PoolClient,
+    args: {
+      tenantId: string;
+      userId: string;
+      projectId: string;
+      milestoneId: string;
+      name?: string;
+      dueDate?: string | null;
+      status?: string;
+    },
+  ) {
+    const cur = await client.query(
+      `SELECT id, name, due_date, status, reached_at
+       FROM project_milestones WHERE id = $1 AND project_id = $2 FOR UPDATE`,
+      [args.milestoneId, args.projectId],
+    );
+    if (!cur.rows[0]) throw new NotFoundException("Milestone not found");
+    const row = cur.rows[0];
+    const name = args.name === undefined ? row.name : args.name.trim();
+    if (!name) throw new BadRequestException("name cannot be empty");
+    let status = row.status as (typeof MILESTONE_STATUSES)[number];
+    if (args.status !== undefined) {
+      if (!MILESTONE_STATUSES.includes(args.status as typeof status)) {
+        throw new BadRequestException("status must be open | reached");
+      }
+      status = args.status as typeof status;
+    }
+    const dueDate =
+      args.dueDate === undefined
+        ? (row.due_date === null ? null : isoDate(row.due_date))
+        : optionalDate(args.dueDate, "dueDate");
+    const res = await client.query(
+      `UPDATE project_milestones
+       SET name = $2, due_date = $3, status = $4,
+           reached_at = CASE
+             WHEN $4 = 'reached' AND reached_at IS NULL THEN now()
+             WHEN $4 = 'open' THEN NULL
+             ELSE reached_at END
+       WHERE id = $1
+       RETURNING id, project_id, name, due_date, status, reached_at, created_at`,
+      [args.milestoneId, name, dueDate, status],
+    );
+    return res.rows[0];
+  }
+
+  async deleteMilestone(
+    client: PoolClient,
+    args: {
+      tenantId: string;
+      userId: string;
+      projectId: string;
+      milestoneId: string;
+    },
+  ): Promise<{ deleted: true }> {
+    const cur = await client.query(
+      "SELECT id FROM project_milestones WHERE id = $1 AND project_id = $2 FOR UPDATE",
+      [args.milestoneId, args.projectId],
+    );
+    if (!cur.rows[0]) throw new NotFoundException("Milestone not found");
+    await client.query("DELETE FROM project_milestones WHERE id = $1", [
+      args.milestoneId,
+    ]);
+    return { deleted: true };
+  }
+
+  // ---- Delivery summary ------------------------------------------------------
+
+  /**
+   * At-a-glance delivery rollup for a project: task counts by status,
+   * % complete (done / total tasks), milestone progress (reached / total),
+   * hours logged vs the sum of task estimates, and budget consumption
+   * (cost cents / budget cents) reusing the profitability cost basis.
+   */
+  async summary(client: PoolClient, projectId: string) {
+    await this.requireProject(client, projectId);
+    const tasks = await client.query(
+      `SELECT
+         count(*)::int AS total,
+         count(*) FILTER (WHERE status = 'todo')::int AS todo,
+         count(*) FILTER (WHERE status = 'in_progress')::int AS in_progress,
+         count(*) FILTER (WHERE status = 'blocked')::int AS blocked,
+         count(*) FILTER (WHERE status = 'done')::int AS done,
+         coalesce(sum(estimate_hours), 0)::numeric AS estimate_hours
+       FROM project_tasks WHERE project_id = $1`,
+      [projectId],
+    );
+    const milestones = await client.query(
+      `SELECT count(*)::int AS total,
+              count(*) FILTER (WHERE status = 'reached')::int AS reached
+       FROM project_milestones WHERE project_id = $1`,
+      [projectId],
+    );
+    const profit = await this.profitability(client, projectId);
+    const t = tasks.rows[0];
+    const m = milestones.rows[0];
+    const totalTasks = Number(t.total);
+    const doneTasks = Number(t.done);
+    const totalMilestones = Number(m.total);
+    const reachedMilestones = Number(m.reached);
+    const pctComplete =
+      totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 1000) / 10 : 0;
+    const milestonePct =
+      totalMilestones > 0
+        ? Math.round((reachedMilestones / totalMilestones) * 1000) / 10
+        : 0;
+    return {
+      tasks: {
+        total: totalTasks,
+        todo: Number(t.todo),
+        in_progress: Number(t.in_progress),
+        blocked: Number(t.blocked),
+        done: doneTasks,
+        pctComplete,
+        estimateHours: Number(t.estimate_hours),
+      },
+      milestones: {
+        total: totalMilestones,
+        reached: reachedMilestones,
+        pct: milestonePct,
+      },
+      hoursLogged: profit.hours,
+      estimateHours: Number(t.estimate_hours),
+      budgetCents: profit.budgetCents,
+      costCents: profit.costCents,
+      budgetUsedPct: profit.budgetUsedPct,
+    };
+  }
+
   // ---- helpers ---------------------------------------------------------------
+
+  private requireTaskStatus(value: string): TaskStatus {
+    if (!TASK_STATUSES.includes(value as TaskStatus)) {
+      throw new BadRequestException(
+        "status must be todo | in_progress | blocked | done",
+      );
+    }
+    return value as TaskStatus;
+  }
+
+  private requireTaskPriority(value: string): TaskPriority {
+    if (!TASK_PRIORITIES.includes(value as TaskPriority)) {
+      throw new BadRequestException("priority must be low | medium | high");
+    }
+    return value as TaskPriority;
+  }
 
   private async requireProject(client: PoolClient, projectId: string) {
     const res = await client.query("SELECT id FROM projects WHERE id = $1", [

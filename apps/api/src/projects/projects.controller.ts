@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from "@nestjs/common";
 import type { TenantTokenClaims } from "@jenga/shared";
@@ -45,6 +46,25 @@ export class ProjectsController {
     );
   }
 
+  /**
+   * Cross-project "my work" list. ?assignee= filters to one employee,
+   * ?status= to one task status. Declared before projects/:id so the
+   * literal "tasks" segment is never parsed as a project id.
+   */
+  @Get("projects/tasks/mine")
+  async myTasks(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Query("assignee") assignee?: string,
+    @Query("status") status?: string,
+  ) {
+    return this.db.withTenant(claims.tid, claims.sub, (client) =>
+      this.projects.listMyTasks(client, {
+        assigneeEmployeeId: assignee || null,
+        status: status || null,
+      }),
+    );
+  }
+
   @Get("projects/:id")
   async get(
     @TenantClaims() claims: TenantTokenClaims,
@@ -52,6 +72,16 @@ export class ProjectsController {
   ) {
     return this.db.withTenant(claims.tid, claims.sub, (client) =>
       this.projects.getProject(client, projectId),
+    );
+  }
+
+  @Get("projects/:id/summary")
+  async summary(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) projectId: string,
+  ) {
+    return this.db.withTenant(claims.tid, claims.sub, (client) =>
+      this.projects.summary(client, projectId),
     );
   }
 
@@ -65,6 +95,10 @@ export class ProjectsController {
       customerId?: string | null;
       budgetCents?: number | null;
       hourlyRateCents?: number | null;
+      description?: string;
+      startDate?: string | null;
+      endDate?: string | null;
+      managerEmployeeId?: string | null;
     },
   ) {
     return this.db.withTenant(claims.tid, claims.sub, (client) =>
@@ -75,6 +109,10 @@ export class ProjectsController {
         customerId: body?.customerId,
         budgetCents: body?.budgetCents,
         hourlyRateCents: body?.hourlyRateCents,
+        description: body?.description,
+        startDate: body?.startDate,
+        endDate: body?.endDate,
+        managerEmployeeId: body?.managerEmployeeId,
       }),
     );
   }
@@ -91,6 +129,10 @@ export class ProjectsController {
       status?: string;
       budgetCents?: number | null;
       hourlyRateCents?: number | null;
+      description?: string;
+      startDate?: string | null;
+      endDate?: string | null;
+      managerEmployeeId?: string | null;
     },
   ) {
     return this.db.withTenant(claims.tid, claims.sub, (client) =>
@@ -103,6 +145,10 @@ export class ProjectsController {
         status: body?.status,
         budgetCents: body?.budgetCents,
         hourlyRateCents: body?.hourlyRateCents,
+        description: body?.description,
+        startDate: body?.startDate,
+        endDate: body?.endDate,
+        managerEmployeeId: body?.managerEmployeeId,
       }),
     );
   }
@@ -288,6 +334,173 @@ export class ProjectsController {
         userId: claims.sub,
         projectId,
         expenseId,
+      }),
+    );
+  }
+
+  // ---- Tasks -------------------------------------------------------------
+
+  @Get("projects/:id/tasks")
+  async listTasks(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) projectId: string,
+  ) {
+    return this.db.withTenant(claims.tid, claims.sub, (client) =>
+      this.projects.listTasks(client, projectId),
+    );
+  }
+
+  @Post("projects/:id/tasks")
+  @Roles(...PROJECT_ROLES)
+  async addTask(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) projectId: string,
+    @Body()
+    body: {
+      title?: string;
+      description?: string;
+      status?: string;
+      priority?: string;
+      assigneeEmployeeId?: string | null;
+      dueDate?: string | null;
+      estimateHours?: number | null;
+      sortOrder?: number;
+    },
+  ) {
+    return this.db.withTenant(claims.tid, claims.sub, (client) =>
+      this.projects.createTask(client, {
+        tenantId: claims.tid,
+        userId: claims.sub,
+        projectId,
+        title: body?.title ?? "",
+        description: body?.description,
+        status: body?.status,
+        priority: body?.priority,
+        assigneeEmployeeId: body?.assigneeEmployeeId,
+        dueDate: body?.dueDate,
+        estimateHours: body?.estimateHours,
+        sortOrder: body?.sortOrder,
+      }),
+    );
+  }
+
+  @Patch("projects/:id/tasks/:taskId")
+  @Roles(...PROJECT_ROLES)
+  async updateTask(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) projectId: string,
+    @Param("taskId", ParseUUIDPipe) taskId: string,
+    @Body()
+    body: {
+      title?: string;
+      description?: string;
+      status?: string;
+      priority?: string;
+      assigneeEmployeeId?: string | null;
+      dueDate?: string | null;
+      estimateHours?: number | null;
+      sortOrder?: number;
+    },
+  ) {
+    return this.db.withTenant(claims.tid, claims.sub, (client) =>
+      this.projects.updateTask(client, {
+        tenantId: claims.tid,
+        userId: claims.sub,
+        projectId,
+        taskId,
+        title: body?.title,
+        description: body?.description,
+        status: body?.status,
+        priority: body?.priority,
+        assigneeEmployeeId: body?.assigneeEmployeeId,
+        dueDate: body?.dueDate,
+        estimateHours: body?.estimateHours,
+        sortOrder: body?.sortOrder,
+      }),
+    );
+  }
+
+  @Delete("projects/:id/tasks/:taskId")
+  @Roles(...PROJECT_ROLES)
+  async deleteTask(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) projectId: string,
+    @Param("taskId", ParseUUIDPipe) taskId: string,
+  ) {
+    return this.db.withTenant(claims.tid, claims.sub, (client) =>
+      this.projects.deleteTask(client, {
+        tenantId: claims.tid,
+        userId: claims.sub,
+        projectId,
+        taskId,
+      }),
+    );
+  }
+
+  // ---- Milestones --------------------------------------------------------
+
+  @Get("projects/:id/milestones")
+  async listMilestones(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) projectId: string,
+  ) {
+    return this.db.withTenant(claims.tid, claims.sub, (client) =>
+      this.projects.listMilestones(client, projectId),
+    );
+  }
+
+  @Post("projects/:id/milestones")
+  @Roles(...PROJECT_ROLES)
+  async addMilestone(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) projectId: string,
+    @Body() body: { name?: string; dueDate?: string | null },
+  ) {
+    return this.db.withTenant(claims.tid, claims.sub, (client) =>
+      this.projects.createMilestone(client, {
+        tenantId: claims.tid,
+        userId: claims.sub,
+        projectId,
+        name: body?.name ?? "",
+        dueDate: body?.dueDate,
+      }),
+    );
+  }
+
+  @Patch("projects/:id/milestones/:milestoneId")
+  @Roles(...PROJECT_ROLES)
+  async updateMilestone(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) projectId: string,
+    @Param("milestoneId", ParseUUIDPipe) milestoneId: string,
+    @Body() body: { name?: string; dueDate?: string | null; status?: string },
+  ) {
+    return this.db.withTenant(claims.tid, claims.sub, (client) =>
+      this.projects.updateMilestone(client, {
+        tenantId: claims.tid,
+        userId: claims.sub,
+        projectId,
+        milestoneId,
+        name: body?.name,
+        dueDate: body?.dueDate,
+        status: body?.status,
+      }),
+    );
+  }
+
+  @Delete("projects/:id/milestones/:milestoneId")
+  @Roles(...PROJECT_ROLES)
+  async deleteMilestone(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) projectId: string,
+    @Param("milestoneId", ParseUUIDPipe) milestoneId: string,
+  ) {
+    return this.db.withTenant(claims.tid, claims.sub, (client) =>
+      this.projects.deleteMilestone(client, {
+        tenantId: claims.tid,
+        userId: claims.sub,
+        projectId,
+        milestoneId,
       }),
     );
   }
