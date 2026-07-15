@@ -54,6 +54,7 @@ const DICT = {
     navHrOverview: "HR & Leave",
     navCrm: "CRM",
     navDocuments: "Documents",
+    navPos: "Sell (POS)",
   },
   sw: {
     tagline: "Ankara za eTIMS · Ulinganisho wa M-Pesa · Hesabu safi",
@@ -100,6 +101,7 @@ const DICT = {
     navHrOverview: "HR na Likizo",
     navCrm: "CRM",
     navDocuments: "Nyaraka",
+    navPos: "Uza (POS)",
   },
 } as const;
 

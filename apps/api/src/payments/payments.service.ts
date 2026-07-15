@@ -253,6 +253,48 @@ export class PaymentsService {
    * fully covered, and any overpayment stays visible as an AR credit
    * (the ledger always books the full amount received).
    */
+  /**
+   * POS cash tender: insert a confirmed cash payment pre-linked to the
+   * invoice and post it through the normal reconcile path — same ledger
+   * treatment as M-Pesa, different drawer account. Runs on the caller's
+   * transaction so the sale (issue + payment) commits atomically.
+   */
+  async recordCashPayment(
+    client: PoolClient,
+    args: {
+      tenantId: string;
+      invoiceId: string;
+      invoiceNo: number;
+      amountCents: number;
+    },
+  ): Promise<{ paymentId: string }> {
+    const res = await client.query(
+      `INSERT INTO payments
+         (tenant_id, rail, state, amount_cents, account_ref,
+          receipt_number, invoice_id, confirmed_at)
+       VALUES ($1, 'cash', 'confirmed', $2, $3, $4, $5, now())
+       RETURNING id`,
+      [
+        args.tenantId,
+        args.amountCents,
+        String(args.invoiceNo),
+        `CASH-${args.invoiceNo}`,
+        args.invoiceId,
+      ],
+    );
+    const paymentId = res.rows[0].id as string;
+    const m = await this.reconcile(
+      client,
+      args.tenantId,
+      paymentId,
+      args.invoiceId,
+    );
+    if (!m.matched) {
+      throw new BadRequestException("Cash payment failed to match invoice");
+    }
+    return { paymentId };
+  }
+
   async reconcile(
     client: PoolClient,
     tenantId: string,
@@ -260,7 +302,7 @@ export class PaymentsService {
     forceInvoiceId?: string,
   ): Promise<{ matched: boolean; allocatedCents?: number }> {
     const pRes = await client.query(
-      `SELECT id, amount_cents, account_ref, invoice_id, journal_entry_id,
+      `SELECT id, rail, amount_cents, account_ref, invoice_id, journal_entry_id,
               state, receipt_number
        FROM payments WHERE id = $1 FOR UPDATE`,
       [paymentId],
@@ -318,16 +360,19 @@ export class PaymentsService {
     }
 
     // Book the FULL amount received; overpayment shows as an AR credit.
+    // Debit account follows the rail: cash drawer vs M-Pesa float.
+    const debitAccount = payment.rail === "cash" ? "1000" : "1010";
+    const railLabel = payment.rail === "cash" ? "Cash" : "M-Pesa";
     const posting = await this.ledger.post(client, {
       tenantId,
       postedBy: null,
       entryDate: new Date().toISOString().slice(0, 10),
-      memo: `M-Pesa ${payment.receipt_number ?? paymentId} for invoice ${invoice.invoice_no}`,
+      memo: `${railLabel} ${payment.receipt_number ?? paymentId} for invoice ${invoice.invoice_no}`,
       sourceType: "payment",
       sourceId: paymentId,
       idempotencyKey: `payment:${paymentId}`,
       lines: [
-        { accountCode: "1010", debitCents: received },
+        { accountCode: debitAccount, debitCents: received },
         { accountCode: "1100", creditCents: received },
       ],
     });

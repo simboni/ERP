@@ -646,10 +646,58 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
 }
 @keyframes skel { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
+/* ---- POS ---- */
+.pos-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 900px) { .pos-grid { grid-template-columns: 1fr; } }
+.pos-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+  max-height: 68vh;
+  overflow-y: auto;
+}
+.pos-item {
+  margin: 0;
+  background: var(--card);
+  color: var(--ink);
+  border: 0;
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-1);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+  font-weight: 500;
+  font-size: 0.87rem;
+}
+.pos-item:hover { background: var(--brand-soft); }
+.pos-item:disabled { opacity: 0.45; }
+.pos-item .pos-item-name { font-weight: 650; }
+.pos-item .kes { color: var(--brand); font-weight: 700; }
+.pos-cart { position: sticky; top: 68px; }
+.pos-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-top: 2px solid var(--line);
+  margin-top: 10px;
+  padding-top: 8px;
+}
+.receipt-wrap { max-width: 360px; margin: 0 auto; }
+.receipt { font-size: 0.88rem; }
+
 /* ---- print ---- */
 @media print {
-  .sidebar, .topbar, .quick-actions, .tabs, button { display: none !important; }
+  .sidebar, .topbar, .quick-actions, .tabs, button, .no-print { display: none !important; }
   main { max-width: none; padding: 0; }
   .card { box-shadow: none; border-color: #ccc; }
   body { background: #fff; color: #000; }
+  .receipt-wrap { max-width: 80mm; margin: 0; }
 }

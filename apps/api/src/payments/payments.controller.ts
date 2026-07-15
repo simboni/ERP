@@ -103,6 +103,24 @@ export class PaymentsController {
     });
   }
 
+  /** Single payment state — the POS polls this while an STK push is out. */
+  @Get(":id")
+  async getOne(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) paymentId: string,
+  ) {
+    return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const res = await client.query(
+        `SELECT id, rail, state, amount_cents, receipt_number, invoice_id,
+                last_error, confirmed_at
+         FROM payments WHERE id = $1`,
+        [paymentId],
+      );
+      if (!res.rows[0]) throw new BadRequestException("Payment not found");
+      return res.rows[0];
+    });
+  }
+
   @Post("sweep-timeouts")
   @Roles("owner", "admin", "accountant")
   async sweepTimeouts(@TenantClaims() claims: TenantTokenClaims) {
