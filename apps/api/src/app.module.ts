@@ -43,6 +43,8 @@ import { BillsService } from "./purchases/bills.service";
 import { RulesService } from "./rules/rules.service";
 import { CrmController } from "./crm/crm.controller";
 import { PosController } from "./invoicing/pos.controller";
+import { PurchaseOrdersController } from "./purchases/purchase-orders.controller";
+import { PurchaseOrdersService } from "./purchases/purchase-orders.service";
 import { ReportsController } from "./ledger/reports.controller";
 import { HrController } from "./payroll/hr.controller";
 import { DashboardController } from "./tenants/dashboard.controller";
@@ -70,6 +72,7 @@ import { TenantsController } from "./tenants/tenants.controller";
     SearchController,
     DocumentsController,
     PosController,
+    PurchaseOrdersController,
     FiscalController,
     InvoicesController,
     SalesExtrasController,
@@ -97,6 +100,7 @@ import { TenantsController } from "./tenants/tenants.controller";
     ComplianceService,
     BillsService,
     InventoryService,
+    PurchaseOrdersService,
     NotificationsService,
     { provide: NOTIFICATION_PROVIDER, useClass: SandboxNotificationProvider },
     { provide: PAYOUT_PROVIDER, useClass: SandboxPayoutProvider },

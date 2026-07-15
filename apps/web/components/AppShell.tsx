@@ -130,6 +130,7 @@ const NAV: NavSection[] = [
     titleKey: "navOperations",
     items: [
       { href: "/purchases", labelKey: "purchases", icon: "cart" },
+      { href: "/purchase-orders", labelKey: "navPurchaseOrders", icon: "box" },
       { href: "/suppliers", labelKey: "navSuppliers", icon: "truck" },
       { href: "/inventory", labelKey: "navInventory", icon: "box" },
       { href: "/documents", labelKey: "navDocuments", icon: "quote" },

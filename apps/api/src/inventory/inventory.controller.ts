@@ -3,6 +3,9 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  Param,
+  ParseUUIDPipe,
   Post,
   UseGuards,
 } from "@nestjs/common";
@@ -71,10 +74,65 @@ export class InventoryController {
   async listItems(@TenantClaims() claims: TenantTokenClaims) {
     return this.db.withTenant(claims.tid, claims.sub, async (client) => {
       const res = await client.query(
-        `SELECT id, sku, name, unit, cost_cents, price_cents, vat_rate, track_stock
+        `SELECT id, sku, name, unit, cost_cents, price_cents, vat_rate,
+                track_stock, reorder_level
          FROM items ORDER BY sku LIMIT 500`,
       );
       return res.rows;
+    });
+  }
+
+  @Post("items/:id/reorder-level")
+  @HttpCode(200)
+  @Roles(...STOCK_ROLES)
+  async setReorderLevel(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) itemId: string,
+    @Body() body: { reorderLevel?: number },
+  ) {
+    if (!Number.isFinite(body?.reorderLevel) || body!.reorderLevel! < 0) {
+      throw new BadRequestException("reorderLevel must be >= 0");
+    }
+    return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const res = await client.query(
+        `UPDATE items SET reorder_level = $2 WHERE id = $1
+         RETURNING id, sku, reorder_level`,
+        [itemId, body!.reorderLevel],
+      );
+      if (!res.rows[0]) throw new BadRequestException("Item not found");
+      return res.rows[0];
+    });
+  }
+
+  /** Items at or below their reorder point, with open PO quantities. */
+  @Get("stock/low")
+  async lowStock(@TenantClaims() claims: TenantTokenClaims) {
+    return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const res = await client.query(
+        `SELECT i.id AS item_id, i.sku, i.name, i.unit, i.reorder_level,
+                coalesce(sum(sm.qty_delta), 0) AS on_hand,
+                coalesce(max(oo.on_order), 0)  AS on_order
+         FROM items i
+         LEFT JOIN stock_movements sm ON sm.item_id = i.id
+         LEFT JOIN (
+           SELECT l.item_id, sum(l.quantity - l.qty_received) AS on_order
+           FROM purchase_order_lines l
+           JOIN purchase_orders po ON po.id = l.po_id
+           WHERE po.status = 'sent'
+           GROUP BY l.item_id
+         ) oo ON oo.item_id = i.id
+         WHERE i.track_stock AND i.reorder_level > 0
+         GROUP BY i.id
+         HAVING coalesce(sum(sm.qty_delta), 0) <= i.reorder_level
+         ORDER BY i.sku`,
+      );
+      return res.rows.map((r) => ({
+        ...r,
+        on_hand: Number(r.on_hand),
+        on_order: Number(r.on_order),
+        reorder_level: Number(r.reorder_level),
+        shortfall: Number(r.reorder_level) - Number(r.on_hand),
+      }));
     });
   }
 
