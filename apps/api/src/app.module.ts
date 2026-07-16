@@ -5,6 +5,8 @@ import { AuthController } from "./auth/auth.controller";
 import { AuthService } from "./auth/auth.service";
 import { ChatService } from "./chat/chat.service";
 import { ChatController } from "./chat/chat.controller";
+import { AlertsService } from "./alerts/alerts.service";
+import { AlertsController } from "./alerts/alerts.controller";
 import { ComplianceController } from "./compliance/compliance.controller";
 import { ComplianceService } from "./compliance/compliance.service";
 import { ControlsController } from "./controls/controls.controller";
@@ -77,6 +79,7 @@ import { TenantsController } from "./tenants/tenants.controller";
   controllers: [
     AuthController,
     ChatController,
+    AlertsController,
     DemoController,
     TenantsController,
     SettingsController,
@@ -110,6 +113,7 @@ import { TenantsController } from "./tenants/tenants.controller";
     DbService,
     AuthService,
     ChatService,
+    AlertsService,
     DemoService,
     DemoPurgeService,
     AuditService,

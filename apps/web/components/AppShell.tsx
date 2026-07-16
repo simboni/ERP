@@ -242,6 +242,26 @@ function roleFromToken(token: string | null): string | null {
   }
 }
 
+interface AlertGroup {
+  key: string;
+  count: number;
+  detail: string;
+  href: string;
+}
+interface AlertFeed {
+  total: number;
+  groups: AlertGroup[];
+}
+
+/** Group key -> localized label + a small emoji glyph. */
+const ALERT_META: Record<string, { label: TKey; icon: string }> = {
+  messages: { label: "alertMessages", icon: "💬" },
+  invoicesOverdue: { label: "alertInvoicesOverdue", icon: "🧾" },
+  approvals: { label: "alertApprovals", icon: "✅" },
+  lowStock: { label: "alertLowStock", icon: "📦" },
+  compliance: { label: "alertCompliance", icon: "📅" },
+};
+
 /**
  * The authenticated application frame: icon sidebar + top bar with
  * quick-add and account chip. Guards every page in the (app) group.
@@ -265,6 +285,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [alerts, setAlerts] = useState<AlertFeed | null>(null);
+  const [bellOpen, setBellOpen] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -315,6 +337,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setOpen(false);
     setMenuOpen(false);
+    setBellOpen(false);
   }, [pathname]);
 
   // Any click outside the account chip closes its menu.
@@ -324,6 +347,33 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     window.addEventListener("click", close);
     return () => window.removeEventListener("click", close);
   }, [menuOpen]);
+
+  // Click outside the bell closes its panel.
+  useEffect(() => {
+    if (!bellOpen) return;
+    const close = (): void => setBellOpen(false);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, [bellOpen]);
+
+  // Poll the notification centre feed while signed in.
+  useEffect(() => {
+    if (!getTenantToken()) return;
+    let stop = false;
+    const load = (): void => {
+      api<AlertFeed>("/alerts")
+        .then((f) => {
+          if (!stop) setAlerts(f);
+        })
+        .catch(() => undefined);
+    };
+    load();
+    const id = setInterval(load, 45000);
+    return () => {
+      stop = true;
+      clearInterval(id);
+    };
+  }, [pathname]);
 
   const signOut = (): void => {
     sessionStorage.removeItem("jenga.tenantName");
@@ -432,6 +482,78 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {t("newInvoice").replace("+ ", "")}
             </span>
           </Link>
+          <span className="topbar-bell">
+            <button
+              type="button"
+              className="bell-btn"
+              aria-label={t("notifications")}
+              title={t("notifications")}
+              onClick={(e) => {
+                e.stopPropagation();
+                setBellOpen((v) => !v);
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path
+                  d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M13.7 21a2 2 0 0 1-3.4 0"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              {alerts && alerts.total > 0 && (
+                <span className="bell-badge">
+                  {alerts.total > 99 ? "99+" : alerts.total}
+                </span>
+              )}
+            </button>
+            {bellOpen && (
+              <div className="bell-panel" onClick={(e) => e.stopPropagation()}>
+                <div className="bell-head">{t("notifications")}</div>
+                {!alerts || alerts.groups.length === 0 ? (
+                  <div className="bell-empty">
+                    <div className="bell-empty-icon">🔔</div>
+                    {t("noNotifications")}
+                  </div>
+                ) : (
+                  <div className="bell-list">
+                    {alerts.groups.map((g) => {
+                      const meta = ALERT_META[g.key];
+                      return (
+                        <Link
+                          key={g.key}
+                          href={g.href}
+                          className="bell-item"
+                          onClick={() => setBellOpen(false)}
+                        >
+                          <span className="bell-item-icon">
+                            {meta?.icon ?? "•"}
+                          </span>
+                          <span className="bell-item-body">
+                            <span className="bell-item-title">
+                              {meta ? t(meta.label) : g.key}
+                            </span>
+                            {g.detail && (
+                              <span className="bell-item-detail">{g.detail}</span>
+                            )}
+                          </span>
+                          <span className="bell-item-count">{g.count}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </span>
           <span className="topbar-account">
             <button
               type="button"
