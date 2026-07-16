@@ -101,7 +101,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!getTenantToken()) {
-      router.replace("/");
+      router.replace("/login");
       return;
     }
     void load();

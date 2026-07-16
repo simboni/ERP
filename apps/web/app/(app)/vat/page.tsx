@@ -38,7 +38,7 @@ export default function VatPage() {
 
   useEffect(() => {
     if (!getTenantToken()) {
-      router.replace("/");
+      router.replace("/login");
       return;
     }
     void load(period);

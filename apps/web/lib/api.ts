@@ -185,7 +185,7 @@ export async function api<T>(
   ) {
     if (await renewSession()) return api<T>(path, opts, true);
     clearTokens();
-    if (typeof window !== "undefined") window.location.href = "/";
+    if (typeof window !== "undefined") window.location.href = "/login";
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {

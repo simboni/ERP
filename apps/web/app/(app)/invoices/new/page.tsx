@@ -57,7 +57,7 @@ export default function NewInvoice() {
 
   useEffect(() => {
     if (!getTenantToken()) {
-      router.replace("/");
+      router.replace("/login");
       return;
     }
     load().catch((err) =>

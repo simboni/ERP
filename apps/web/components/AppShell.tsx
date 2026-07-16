@@ -271,7 +271,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!getTenantToken()) {
-      router.replace("/");
+      router.replace("/login");
       return;
     }
     const stored = sessionStorage.getItem("jenga.tenantName");
@@ -322,7 +322,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     sessionStorage.removeItem("jenga.modules");
     sessionStorage.removeItem("jenga.role");
     clearTokens();
-    router.replace("/");
+    router.replace("/login");
   };
 
   const initials = tenantName

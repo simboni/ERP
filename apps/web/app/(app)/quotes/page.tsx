@@ -46,7 +46,7 @@ export default function QuotesPage() {
 
   useEffect(() => {
     if (!getTenantToken()) {
-      router.replace("/");
+      router.replace("/login");
       return;
     }
     load().catch((e) => setError(e instanceof Error ? e.message : "load failed"));
