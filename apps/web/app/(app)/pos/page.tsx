@@ -51,7 +51,7 @@ export default function PosPage() {
   const [tab, setTab] = useState<Tab>("sell");
   const [items, setItems] = useState<Item[]>([]);
   const [sales, setSales] = useState<SaleRow[]>([]);
-  const [newItem, setNewItem] = useState({ sku: "", name: "", priceKes: "", costKes: "", reorder: "" });
+  const [newItem, setNewItem] = useState({ sku: "", name: "", priceKes: "", costKes: "", reorder: "", isService: false });
   const [stock, setStock] = useState<Record<string, number>>({});
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchId] = useState("");
@@ -601,9 +601,36 @@ export default function PosPage() {
               </div>
               <div>
                 <label>Reorder at</label>
-                <input type="number" value={newItem.reorder} onChange={(e) => setNewItem({ ...newItem, reorder: e.target.value })} />
+                <input
+                  type="number"
+                  value={newItem.reorder}
+                  disabled={newItem.isService}
+                  onChange={(e) => setNewItem({ ...newItem, reorder: e.target.value })}
+                />
               </div>
             </div>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                cursor: "pointer",
+                marginTop: 12,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={newItem.isService}
+                onChange={(e) =>
+                  setNewItem({ ...newItem, isService: e.target.checked })
+                }
+                style={{ width: "auto", margin: 0 }}
+              />
+              <span>
+                This is a service (no stock) — e.g. a room night, a massage, a
+                labour hour, a meal. Services always sell without needing stock.
+              </span>
+            </label>
             <button
               disabled={!newItem.sku || !newItem.name}
               onClick={() => {
@@ -615,23 +642,24 @@ export default function PosPage() {
                     name: newItem.name,
                     priceCents: Math.round(Number(newItem.priceKes || 0) * 100),
                     costCents: Math.round(Number(newItem.costKes || 0) * 100),
+                    trackStock: !newItem.isService,
                   },
                 })
                   .then(async (created: unknown) => {
                     const id = (created as { id: string }).id;
-                    if (Number(newItem.reorder) > 0) {
+                    if (!newItem.isService && Number(newItem.reorder) > 0) {
                       await api(`/tenants/current/items/${id}/reorder-level`, {
                         method: "POST",
                         body: { reorderLevel: Number(newItem.reorder) },
                       });
                     }
-                    setNewItem({ sku: "", name: "", priceKes: "", costKes: "", reorder: "" });
+                    setNewItem({ sku: "", name: "", priceKes: "", costKes: "", reorder: "", isService: false });
                     load();
                   })
                   .catch((e) => setError(e instanceof Error ? e.message : "failed"));
               }}
             >
-              Add item
+              Add {newItem.isService ? "service" : "item"}
             </button>
           </div>
 
