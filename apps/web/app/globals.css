@@ -394,6 +394,15 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
   font-size: 0.85rem;
 }
 .shell-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+/* Full-bleed pages (e.g. Chat) opt out of main's centered, padded frame so
+   they can own the full area below the top bar with their own scrolling. */
+main:has(> .chat-shell) {
+  max-width: none;
+  padding: 0;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
 .topbar {
   display: flex;
   align-items: center;

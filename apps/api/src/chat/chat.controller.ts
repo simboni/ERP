@@ -22,6 +22,16 @@ import type { Message, Conversation } from "./chat.service";
 export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 
+  @Get("directory")
+  async directory(
+    @TenantClaims() claims: TenantTokenClaims,
+  ): Promise<{
+    users: Array<{ id: string; name: string; email: string }>;
+    departments: Array<{ id: string; name: string }>;
+  }> {
+    return this.chatService.getDirectory(claims);
+  }
+
   @Get("conversations")
   async listConversations(
     @TenantClaims() claims: TenantTokenClaims,

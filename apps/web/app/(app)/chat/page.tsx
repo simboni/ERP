@@ -19,11 +19,17 @@ interface Message {
   reactions: Array<{ emoji: string; users: string[]; count: number }>;
 }
 
+interface Participant {
+  id: string;
+  name: string;
+  isOnline: boolean;
+}
+
 interface Conversation {
   id: string;
   type: "direct" | "department" | "broadcast";
   name: string;
-  participants: Array<{ id: string; name: string; isOnline: boolean }>;
+  participants: Participant[];
   lastMessage: Message | null;
   unreadCount: number;
   isPinned: boolean;
@@ -36,7 +42,18 @@ interface OnlineUser {
   lastSeen: string;
 }
 
+interface Directory {
+  users: Array<{ id: string; name: string; email: string }>;
+  departments: Array<{ id: string; name: string }>;
+}
+
 const EMOJI_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
+
+function iconFor(type: Conversation["type"]): string {
+  if (type === "broadcast") return "📢";
+  if (type === "department") return "#";
+  return "";
+}
 
 export default function ChatPage() {
   const { t } = useI18n();
@@ -46,121 +63,202 @@ export default function ChatPage() {
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
   const [messageContent, setMessageContent] = useState("");
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showReactionPicker, setShowReactionPicker] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+
+  // New-conversation modal
+  const [showNew, setShowNew] = useState(false);
+  const [directory, setDirectory] = useState<Directory>({ users: [], departments: [] });
+  const [newTab, setNewTab] = useState<"people" | "departments" | "everyone">("people");
+  const [peopleSearch, setPeopleSearch] = useState("");
+  const [busy, setBusy] = useState(false);
+
   const messageListRef = useRef<HTMLDivElement>(null);
 
-  // Load conversations
-  useEffect(() => {
-    const loadConversations = async () => {
-      try {
-        setLoading(true);
-        const res = await api<Conversation[]>("/chat/conversations?limit=50");
-        setConversations(res || []);
-        if (res?.length > 0 && !selectedConversationId) {
-          setSelectedConversationId(res[0].id);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load conversations");
-      } finally {
-        setLoading(false);
-      }
-    };
+  const loadConversations = useCallback(async () => {
+    try {
+      const res = await api<Conversation[]>("/chat/conversations?limit=50");
+      setConversations(res || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load conversations");
+    }
+  }, []);
 
+  // Conversations: initial load + gentle polling.
+  useEffect(() => {
     loadConversations();
-    const interval = setInterval(loadConversations, 10000); // Refresh every 10s
+    const interval = setInterval(loadConversations, 10000);
     return () => clearInterval(interval);
-  }, [selectedConversationId]);
+  }, [loadConversations]);
 
-  // Load messages for selected conversation
+  // Messages for the selected conversation.
   useEffect(() => {
-    if (!selectedConversationId) return;
-
+    if (!selectedConversationId) {
+      setMessages([]);
+      return;
+    }
+    let cancelled = false;
     const loadMessages = async () => {
       try {
-        const res = await api<Message[]>(`/chat/messages?conversationId=${selectedConversationId}&limit=50`);
-        setMessages((res || []).reverse());
+        const res = await api<Message[]>(
+          `/chat/messages?conversationId=${selectedConversationId}&limit=50`,
+        );
+        if (!cancelled) setMessages((res || []).slice().reverse());
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load messages");
+        if (!cancelled)
+          setError(err instanceof Error ? err.message : "Failed to load messages");
       }
     };
-
     loadMessages();
-    const interval = setInterval(loadMessages, 5000); // Refresh every 5s
-    return () => clearInterval(interval);
+    const interval = setInterval(loadMessages, 4000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [selectedConversationId]);
 
-  // Load online users
+  // Online users.
   useEffect(() => {
-    const loadOnlineUsers = async () => {
+    const load = async () => {
       try {
-        const res = await api<OnlineUser[]>("/chat/presence/online");
-        setOnlineUsers(res || []);
-      } catch (err) {
-        // Silently fail for online users
+        setOnlineUsers((await api<OnlineUser[]>("/chat/presence/online")) || []);
+      } catch {
+        /* non-critical */
       }
     };
-
-    loadOnlineUsers();
-    const interval = setInterval(loadOnlineUsers, 30000); // Refresh every 30s
+    load();
+    const interval = setInterval(load, 20000);
     return () => clearInterval(interval);
   }, []);
 
-  // Update presence
+  // Presence heartbeat.
   useEffect(() => {
-    const updatePresence = async () => {
-      try {
-        await api("/chat/presence/update", { method: "POST", body: { isOnline: true } });
-      } catch (err) {
-        // Silently fail
-      }
-    };
-
-    updatePresence();
-    const interval = setInterval(updatePresence, 60000); // Update every 60s
-    return () => clearInterval(interval);
-
-    // Cleanup: set offline on unmount
+    const beat = () =>
+      api("/chat/presence/update", { method: "POST", body: { isOnline: true } }).catch(
+        () => {},
+      );
+    beat();
+    const interval = setInterval(beat, 45000);
     return () => {
-      api("/chat/presence/update", { method: "POST", body: { isOnline: false } }).catch(() => {});
+      clearInterval(interval);
+      api("/chat/presence/update", { method: "POST", body: { isOnline: false } }).catch(
+        () => {},
+      );
     };
   }, []);
 
-  // Auto-scroll to bottom
+  // Auto-scroll to newest.
   useEffect(() => {
     if (messageListRef.current) {
       messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
     }
   }, [messages]);
 
-  const sendMessage = async () => {
-    if (!messageContent.trim() || !selectedConversationId) return;
+  const openConversation = useCallback(
+    (id: string) => {
+      setSelectedConversationId(id);
+      setShowNew(false);
+      loadConversations();
+    },
+    [loadConversations],
+  );
 
+  const openNewModal = async () => {
+    setShowNew(true);
+    setNewTab("people");
+    setPeopleSearch("");
+    try {
+      setDirectory(await api<Directory>("/chat/directory"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load directory");
+    }
+  };
+
+  const startDirect = async (userId: string) => {
+    setBusy(true);
+    try {
+      const res = await api<{ conversationId: string }>("/chat/conversations/direct", {
+        method: "POST",
+        body: { otherUserId: userId },
+      });
+      openConversation(res.conversationId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to start conversation");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openDepartment = async (departmentId: string) => {
+    setBusy(true);
+    try {
+      const res = await api<{ conversationId: string }>(
+        "/chat/conversations/department",
+        { method: "POST", body: { departmentId } },
+      );
+      openConversation(res.conversationId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to open department channel");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openEveryone = async () => {
+    setBusy(true);
+    try {
+      const res = await api<{ conversationId: string }>(
+        "/chat/conversations/org-broadcast",
+      );
+      openConversation(res.conversationId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to open channel");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sendMessage = async () => {
+    const content = messageContent.trim();
+    if (!content || !selectedConversationId || sending) return;
+    setSending(true);
     try {
       const res = await api<Message>("/chat/messages", {
         method: "POST",
         body: {
           conversationId: selectedConversationId,
-          content: messageContent,
+          content,
           replyToId: replyingTo?.id || undefined,
         },
       });
-      setMessages([...messages, res]);
+      setMessages((prev) => [...prev, res]);
       setMessageContent("");
       setReplyingTo(null);
+      loadConversations();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send message");
+    } finally {
+      setSending(false);
     }
+  };
+
+  const refreshMessages = async () => {
+    if (!selectedConversationId) return;
+    const res = await api<Message[]>(
+      `/chat/messages?conversationId=${selectedConversationId}&limit=50`,
+    );
+    setMessages((res || []).slice().reverse());
   };
 
   const addReaction = async (messageId: string, emoji: string) => {
     try {
-      await api(`/chat/messages/${messageId}/reactions`, { method: "POST", body: { emoji } });
-      // Refresh messages to show new reaction
-      const res = await api<Message[]>(`/chat/messages?conversationId=${selectedConversationId}&limit=50`);
-      setMessages((res || []).reverse());
+      await api(`/chat/messages/${messageId}/reactions`, {
+        method: "POST",
+        body: { emoji },
+      });
       setShowReactionPicker(null);
+      await refreshMessages();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add reaction");
     }
@@ -168,26 +266,42 @@ export default function ChatPage() {
 
   const removeReaction = async (messageId: string, emoji: string) => {
     try {
-      await api(`/chat/messages/${messageId}/reactions/${emoji}`, { method: "DELETE" });
-      // Refresh messages to show updated reactions
-      const res = await api<Message[]>(`/chat/messages?conversationId=${selectedConversationId}&limit=50`);
-      setMessages((res || []).reverse());
+      await api(`/chat/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, {
+        method: "DELETE",
+      });
+      await refreshMessages();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to remove reaction");
     }
   };
 
-  const isOnline = (userId: string) => onlineUsers.some((u) => u.id === userId);
+  const selectedConversation = conversations.find(
+    (c) => c.id === selectedConversationId,
+  );
 
-  const selectedConversation = conversations.find((c) => c.id === selectedConversationId);
+  const filteredPeople = directory.users.filter((u) =>
+    (u.name + " " + u.email).toLowerCase().includes(peopleSearch.toLowerCase()),
+  );
+
+  const headerSubtitle = (conv: Conversation): string => {
+    if (conv.type === "direct") {
+      const anyOnline = conv.participants.some((p) => p.isOnline);
+      return anyOnline ? t("online") : t("offline");
+    }
+    return `${conv.participants.length} ${t("members")}`;
+  };
 
   return (
-    <div className={styles.container}>
+    <div className={`chat-shell ${styles.container}`}>
       {/* Sidebar: Conversation list */}
       <div className={styles.sidebar}>
         <div className={styles.sidebarHeader}>
           <h2>{t("chat")}</h2>
-          <button className={styles.newButton} title={t("newConversation")}>
+          <button
+            className={styles.newButton}
+            title={t("newMessage")}
+            onClick={openNewModal}
+          >
             +
           </button>
         </div>
@@ -205,13 +319,17 @@ export default function ChatPage() {
                 onClick={() => setSelectedConversationId(conv.id)}
               >
                 <div className={styles.convName}>
-                  <div className={styles.convTitle}>{conv.name}</div>
+                  <div className={styles.convTitle}>
+                    {iconFor(conv.type)} {conv.name}
+                  </div>
                   {conv.unreadCount > 0 && (
                     <span className={styles.badge}>{conv.unreadCount}</span>
                   )}
                 </div>
                 {conv.lastMessage && (
-                  <div className={styles.convPreview}>{conv.lastMessage.content.substring(0, 40)}</div>
+                  <div className={styles.convPreview}>
+                    {conv.lastMessage.content.substring(0, 40)}
+                  </div>
                 )}
               </div>
             ))
@@ -239,26 +357,17 @@ export default function ChatPage() {
       <div className={styles.main}>
         {selectedConversation ? (
           <>
-            {/* Header */}
             <div className={styles.header}>
               <div>
-                <h1>{selectedConversation.name}</h1>
-                {selectedConversation.type === "direct" && (
-                  <div className={styles.participantStatus}>
-                    {selectedConversation.participants.map((p) => (
-                      <span key={p.id} className={styles.participant}>
-                        <span
-                          className={`${styles.statusDot} ${isOnline(p.id) ? styles.online : ""}`}
-                        ></span>
-                        {p.name}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                <h1>
+                  {iconFor(selectedConversation.type)} {selectedConversation.name}
+                </h1>
+                <div className={styles.participantStatus}>
+                  {headerSubtitle(selectedConversation)}
+                </div>
               </div>
             </div>
 
-            {/* Messages */}
             <div className={styles.messageList} ref={messageListRef}>
               {messages.length === 0 ? (
                 <div className={styles.emptyState}>{t("noMessages")}</div>
@@ -266,9 +375,7 @@ export default function ChatPage() {
                 messages.map((msg) => (
                   <div key={msg.id} className={styles.messageContainer}>
                     {msg.replyToId && (
-                      <div className={styles.threadContext}>
-                        {t("replyingTo")} {msg.senderName}
-                      </div>
+                      <div className={styles.threadContext}>↳ {t("replyingTo")}…</div>
                     )}
                     <div className={styles.messageGroup}>
                       <div className={styles.messageSender}>{msg.senderName}</div>
@@ -279,7 +386,7 @@ export default function ChatPage() {
                             {msg.attachments.map((att) => (
                               <a
                                 key={att.id}
-                                href={`#`}
+                                href="#"
                                 className={styles.attachment}
                                 title={att.fileName}
                               >
@@ -303,22 +410,32 @@ export default function ChatPage() {
                           </div>
                         )}
                         <div className={styles.messageTime}>
-                          {new Date(msg.createdAt).toLocaleTimeString()}
+                          {new Date(msg.createdAt).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
                         </div>
                       </div>
                       <button
                         className={styles.reactionButton}
+                        title="React"
                         onClick={() =>
                           setShowReactionPicker(
-                            showReactionPicker === msg.id ? null : msg.id
+                            showReactionPicker === msg.id ? null : msg.id,
                           )
                         }
                       >
                         😊
                       </button>
+                      <button
+                        className={styles.reactionButton}
+                        title={t("replyingTo")}
+                        onClick={() => setReplyingTo(msg)}
+                      >
+                        ↩
+                      </button>
                     </div>
 
-                    {/* Reaction picker */}
                     {showReactionPicker === msg.id && (
                       <div className={styles.reactionPicker}>
                         {EMOJI_REACTIONS.map((emoji) => (
@@ -337,41 +454,165 @@ export default function ChatPage() {
               )}
             </div>
 
-            {/* Reply context */}
             {replyingTo && (
               <div className={styles.replyContext}>
                 <div className={styles.replyContent}>
-                  <strong>{t("replyingTo")} {replyingTo.senderName}:</strong>
+                  <strong>
+                    {t("replyingTo")} {replyingTo.senderName}
+                  </strong>
                   <p>{replyingTo.content.substring(0, 100)}</p>
                 </div>
                 <button onClick={() => setReplyingTo(null)}>×</button>
               </div>
             )}
 
-            {/* Message composer */}
             <div className={styles.composer}>
               <textarea
                 value={messageContent}
                 onChange={(e) => setMessageContent(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && e.ctrlKey) {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
                     sendMessage();
                   }
                 }}
                 placeholder={t("typeMessage")}
                 className={styles.input}
+                rows={1}
               />
-              <button onClick={sendMessage} className={styles.sendButton}>
+              <button
+                onClick={sendMessage}
+                className={styles.sendButton}
+                disabled={sending || !messageContent.trim()}
+              >
                 {t("send")}
               </button>
             </div>
           </>
         ) : (
-          <div className={styles.emptyState}>{t("selectConversation")}</div>
+          <div className={styles.welcome}>
+            <div className={styles.welcomeIcon}>💬</div>
+            <h2>{t("startConversation")}</h2>
+            <p>{t("startConversationHint")}</p>
+            <button className={styles.primaryButton} onClick={openNewModal}>
+              {t("newMessage")}
+            </button>
+          </div>
         )}
 
-        {error && <div className={styles.error}>{error}</div>}
+        {error && (
+          <div className={styles.error} onClick={() => setError(null)}>
+            {error}
+          </div>
+        )}
       </div>
+
+      {/* New-conversation modal */}
+      {showNew && (
+        <div className={styles.modalOverlay} onClick={() => setShowNew(false)}>
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h3>{t("newMessage")}</h3>
+              <button onClick={() => setShowNew(false)}>×</button>
+            </div>
+
+            <div className={styles.tabs}>
+              <button
+                className={newTab === "people" ? styles.tabActive : styles.tab}
+                onClick={() => setNewTab("people")}
+              >
+                {t("catPeople")}
+              </button>
+              <button
+                className={newTab === "departments" ? styles.tabActive : styles.tab}
+                onClick={() => setNewTab("departments")}
+              >
+                {t("catDepartments")}
+              </button>
+              <button
+                className={newTab === "everyone" ? styles.tabActive : styles.tab}
+                onClick={() => setNewTab("everyone")}
+              >
+                {t("catEveryone")}
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              {newTab === "people" && (
+                <>
+                  <input
+                    className={styles.searchInput}
+                    placeholder={t("searchPeople")}
+                    value={peopleSearch}
+                    onChange={(e) => setPeopleSearch(e.target.value)}
+                    autoFocus
+                  />
+                  <div className={styles.pickList}>
+                    {filteredPeople.length === 0 ? (
+                      <div className={styles.emptyState}>{t("noMatches")}</div>
+                    ) : (
+                      filteredPeople.map((u) => (
+                        <button
+                          key={u.id}
+                          className={styles.pickItem}
+                          disabled={busy}
+                          onClick={() => startDirect(u.id)}
+                        >
+                          <span className={styles.pickAvatar}>
+                            {u.name.charAt(0).toUpperCase()}
+                          </span>
+                          <span className={styles.pickInfo}>
+                            <span className={styles.pickName}>{u.name}</span>
+                            <span className={styles.pickSub}>{u.email}</span>
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </>
+              )}
+
+              {newTab === "departments" && (
+                <div className={styles.pickList}>
+                  {directory.departments.length === 0 ? (
+                    <div className={styles.emptyState}>{t("noDepartments")}</div>
+                  ) : (
+                    directory.departments.map((d) => (
+                      <button
+                        key={d.id}
+                        className={styles.pickItem}
+                        disabled={busy}
+                        onClick={() => openDepartment(d.id)}
+                      >
+                        <span className={styles.pickAvatar}>#</span>
+                        <span className={styles.pickInfo}>
+                          <span className={styles.pickName}>{d.name}</span>
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {newTab === "everyone" && (
+                <div className={styles.pickList}>
+                  <button
+                    className={styles.pickItem}
+                    disabled={busy}
+                    onClick={openEveryone}
+                  >
+                    <span className={styles.pickAvatar}>📢</span>
+                    <span className={styles.pickInfo}>
+                      <span className={styles.pickName}>{t("everyoneChannel")}</span>
+                      <span className={styles.pickSub}>{t("everyoneDesc")}</span>
+                    </span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

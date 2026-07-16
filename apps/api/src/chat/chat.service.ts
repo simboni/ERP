@@ -1,4 +1,5 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
+import type { PoolClient } from "pg";
 import { DbService } from "../db/db.service";
 import type { TenantTokenClaims } from "@jenga/shared";
 
@@ -30,6 +31,36 @@ export interface Conversation {
 @Injectable()
 export class ChatService {
   constructor(private readonly db: DbService) {}
+
+  /**
+   * Directory of people and departments the current user can start a
+   * conversation with. Available to every tenant member regardless of
+   * privilege — chat is a company-wide tool. Excludes the caller from the
+   * people list (you don't DM yourself).
+   */
+  async getDirectory(
+    claims: TenantTokenClaims,
+  ): Promise<{
+    users: Array<{ id: string; name: string; email: string }>;
+    departments: Array<{ id: string; name: string }>;
+  }> {
+    return this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const users = await client.query(
+        `SELECT u.id, u.full_name AS name, u.email
+         FROM memberships m
+         JOIN users u ON u.id = m.user_id
+         WHERE m.tenant_id = $1 AND m.status = 'active' AND u.id <> $2
+         ORDER BY u.full_name`,
+        [claims.tid, claims.sub],
+      );
+      const departments = await client.query(
+        `SELECT id, name FROM departments
+         WHERE tenant_id = $1 ORDER BY name`,
+        [claims.tid],
+      );
+      return { users: users.rows, departments: departments.rows };
+    });
+  }
 
   /**
    * Get or create a direct message conversation between two users.
@@ -86,17 +117,31 @@ export class ChatService {
         [claims.tid, departmentId],
       );
 
-      if (existing.rows[0]) return existing.rows[0].id;
-
-      const conv = await client.query(
-        `INSERT INTO chat_conversations
-         (tenant_id, type, department_id, created_by)
-         VALUES ($1, 'department', $2, $3)
-         RETURNING id`,
-        [claims.tid, departmentId, claims.sub],
+      const dept = await client.query(
+        `SELECT name FROM departments WHERE id = $1 AND tenant_id = $2`,
+        [departmentId, claims.tid],
       );
+      const name = dept.rows[0]?.name ? `# ${dept.rows[0].name}` : "# Department";
 
-      return conv.rows[0].id;
+      let conversationId: string;
+      if (existing.rows[0]) {
+        conversationId = existing.rows[0].id;
+      } else {
+        const conv = await client.query(
+          `INSERT INTO chat_conversations
+           (tenant_id, type, name, department_id, created_by)
+           VALUES ($1, 'department', $2, $3, $4)
+           RETURNING id`,
+          [claims.tid, name, departmentId, claims.sub],
+        );
+        conversationId = conv.rows[0].id;
+      }
+
+      // A channel is only useful if its messages reach people: every active
+      // member of the tenant is a participant (idempotent, so members who
+      // join later are picked up the next time anyone opens it).
+      await this.ensureAllMembersParticipants(client, claims.tid, conversationId);
+      return conversationId;
     });
   }
 
@@ -111,18 +156,41 @@ export class ChatService {
         [claims.tid],
       );
 
-      if (existing.rows[0]) return existing.rows[0].id;
+      let conversationId: string;
+      if (existing.rows[0]) {
+        conversationId = existing.rows[0].id;
+      } else {
+        const conv = await client.query(
+          `INSERT INTO chat_conversations
+           (tenant_id, type, name, created_by)
+           VALUES ($1, 'broadcast', $2, $3)
+           RETURNING id`,
+          [claims.tid, "📢 Everyone", claims.sub],
+        );
+        conversationId = conv.rows[0].id;
+      }
 
-      const conv = await client.query(
-        `INSERT INTO chat_conversations
-         (tenant_id, type, created_by)
-         VALUES ($1, 'broadcast', $2)
-         RETURNING id`,
-        [claims.tid, claims.sub],
-      );
-
-      return conv.rows[0].id;
+      await this.ensureAllMembersParticipants(client, claims.tid, conversationId);
+      return conversationId;
     });
+  }
+
+  /**
+   * Make every active member of the tenant a participant of a channel.
+   * Idempotent — safe to call on every open so newly-added members join.
+   */
+  private async ensureAllMembersParticipants(
+    client: PoolClient,
+    tenantId: string,
+    conversationId: string,
+  ): Promise<void> {
+    await client.query(
+      `INSERT INTO chat_participants (conversation_id, user_id)
+       SELECT $1, m.user_id FROM memberships m
+       WHERE m.tenant_id = $2 AND m.status = 'active'
+       ON CONFLICT (conversation_id, user_id) DO NOTHING`,
+      [conversationId, tenantId],
+    );
   }
 
   /**
@@ -339,16 +407,45 @@ export class ChatService {
     );
 
     if (!result.rows[0]) {
-      throw new Error("Access denied");
+      // 404 (not 403) so we never reveal that a conversation exists in
+      // another tenant — RLS already hid it from this query.
+      throw new NotFoundException("Conversation not found");
     }
   }
 
   private async enrichConversation(claims: TenantTokenClaims, row: any, client: any) {
+    // Participants (with live online status) power the header and, for
+    // direct chats, the display name (the other person).
+    const parts = await client.query(
+      `SELECT u.id, u.full_name AS name,
+              COALESCE(up.is_online, false) AS is_online
+       FROM chat_participants cp
+       JOIN users u ON u.id = cp.user_id
+       LEFT JOIN user_presence up ON up.user_id = u.id
+       WHERE cp.conversation_id = $1`,
+      [row.id],
+    );
+    const participants = parts.rows.map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      isOnline: p.is_online,
+    }));
+
+    let name: string = row.name;
+    if (!name) {
+      if (row.type === "direct") {
+        const other = participants.find((p: any) => p.id !== claims.sub);
+        name = other?.name || "Direct message";
+      } else {
+        name = this.getConversationName(claims, row);
+      }
+    }
+
     const conv: Conversation = {
       id: row.id,
       type: row.type,
-      name: row.name || this.getConversationName(claims, row),
-      participants: [],
+      name,
+      participants,
       lastMessage: null,
       unreadCount: row.unread_count || 0,
       isPinned: row.is_pinned,

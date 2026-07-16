@@ -1,8 +1,11 @@
 .container {
   display: flex;
-  height: 100vh;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
   background: #f5f5f5;
   gap: 0;
+  position: relative;
 }
 
 .sidebar {
@@ -464,6 +467,212 @@
   border-radius: 4px;
   font-size: 13px;
   margin: 16px 24px 0 24px;
+}
+
+/* Welcome / empty main pane */
+.welcome {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 32px;
+  color: #555;
+  gap: 8px;
+}
+
+.welcomeIcon {
+  font-size: 48px;
+  margin-bottom: 8px;
+}
+
+.welcome h2 {
+  margin: 0;
+  font-size: 20px;
+  color: #222;
+}
+
+.welcome p {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #777;
+  max-width: 360px;
+}
+
+.primaryButton {
+  padding: 10px 20px;
+  background: #1967d2;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.primaryButton:hover {
+  background: #1552b8;
+}
+
+/* New-conversation modal */
+.modalOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 16px;
+}
+
+.modal {
+  background: #fff;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 440px;
+  max-height: 80%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #eee;
+}
+
+.modalHeader h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #222;
+}
+
+.modalHeader button {
+  border: none;
+  background: transparent;
+  font-size: 22px;
+  color: #999;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 12px 20px 0;
+}
+
+.tab,
+.tabActive {
+  flex: 1;
+  padding: 8px 4px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: #777;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.tabActive {
+  color: #1967d2;
+  border-bottom-color: #1967d2;
+}
+
+.modalBody {
+  padding: 12px 20px 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: #1967d2;
+}
+
+.pickList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.pickItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: background 0.15s;
+}
+
+.pickItem:hover {
+  background: #f2f6fc;
+}
+
+.pickItem:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.pickAvatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #e8f0fe;
+  color: #1967d2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.pickInfo {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.pickName {
+  font-size: 14px;
+  color: #222;
+  font-weight: 500;
+}
+
+.pickSub {
+  font-size: 12px;
+  color: #999;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 @media (max-width: 768px) {
