@@ -288,13 +288,17 @@ export class ChatService {
    * Update online presence.
    */
   async updatePresence(claims: TenantTokenClaims, isOnline: boolean): Promise<void> {
-    await this.db.query(
-      `INSERT INTO user_presence (user_id, tenant_id, is_online, last_activity_at)
-       VALUES ($1, $2, $3, now())
-       ON CONFLICT (user_id) DO UPDATE SET
-         is_online = $3, last_activity_at = now()`,
-      [claims.sub, claims.tid, isOnline],
-    );
+    // Must run inside a tenant transaction so RLS sees app.current_tenant;
+    // the user_presence policy's WITH CHECK is keyed off it.
+    await this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      await client.query(
+        `INSERT INTO user_presence (user_id, tenant_id, is_online, last_activity_at)
+         VALUES ($1, $2, $3, now())
+         ON CONFLICT (user_id) DO UPDATE SET
+           is_online = $3, last_activity_at = now()`,
+        [claims.sub, claims.tid, isOnline],
+      );
+    });
   }
 
   /**
