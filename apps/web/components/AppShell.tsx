@@ -6,7 +6,11 @@ import { useEffect, useState } from "react";
 import { api, clearTokens, getTenantToken } from "@/lib/api";
 import { CommandPalette } from "@/components/CommandPalette";
 import { LangToggle, useI18n, type TKey } from "@/lib/i18n";
-import { OPTIONAL_MODULE_KEYS, type OptionalModuleKey } from "@/lib/modules";
+import {
+  OPTIONAL_MODULE_KEYS,
+  roleCanSee,
+  type OptionalModuleKey,
+} from "@/lib/modules";
 
 /* Minimal 16px stroke icon set (inline, no dependencies). */
 const stroke = {
@@ -212,6 +216,25 @@ const NAV: NavSection[] = [
 ];
 
 /**
+ * Best-effort read of the role from a tenant JWT's middle segment. A JWT is
+ * three base64url segments; the payload carries `rol`. Never trusted for
+ * security (the API guards are) — only used to scope the sidebar when the
+ * cached `jenga.role` is absent. Returns null on any malformed token.
+ */
+function roleFromToken(token: string | null): string | null {
+  if (!token) return null;
+  const seg = token.split(".")[1];
+  if (!seg) return null;
+  try {
+    const json = atob(seg.replace(/-/g, "+").replace(/_/g, "/"));
+    const claims = JSON.parse(json) as { rol?: string };
+    return typeof claims.rol === "string" ? claims.rol : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * The authenticated application frame: icon sidebar + top bar with
  * quick-add and account chip. Guards every page in the (app) group.
  */
@@ -227,6 +250,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // enabled_modules set. The single source of truth is enabled_modules; the
   // shell never inspects business_type.
   const [modules, setModules] = useState<string[] | null>(null);
+  // null = role not yet known → treat as owner-like (show all) so nothing
+  // flickers away before the cached role / token resolves, same pattern as
+  // the modules loading state above.
+  const [role, setRole] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -249,6 +276,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
     const stored = sessionStorage.getItem("jenga.tenantName");
     const storedModules = sessionStorage.getItem("jenga.modules");
+    // Role: prefer the value cached at login; fall back to decoding the
+    // tenant token's `rol` claim client-side (a JWT is base64url segments).
+    const storedRole =
+      sessionStorage.getItem("jenga.role") ?? roleFromToken(getTenantToken());
+    if (storedRole) setRole(storedRole);
     if (stored) setTenantName(stored);
     if (storedModules) {
       try {
@@ -288,6 +320,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const signOut = (): void => {
     sessionStorage.removeItem("jenga.tenantName");
     sessionStorage.removeItem("jenga.modules");
+    sessionStorage.removeItem("jenga.role");
     clearTokens();
     router.replace("/");
   };
@@ -309,15 +342,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         <nav>
           {NAV.map((section, si) => {
-            // Core items (no moduleKey) always show. Optional items show only
-            // when enabled. Until the module set loads (modules === null) show
-            // everything so nothing flickers away on first paint.
-            const visible = section.items.filter(
-              (item) =>
+            // Two gates: (1) module — core items (no moduleKey) always pass,
+            // optional items pass only when enabled; until the module set
+            // loads (modules === null) all pass so nothing flickers away.
+            // (2) role — the current user's role must be allowed to see the
+            // href; until the role is known (role === null) treat as owner-like
+            // and let everything through, same anti-flicker pattern.
+            const visible = section.items.filter((item) => {
+              const moduleOk =
                 !item.moduleKey ||
                 modules === null ||
-                modules.includes(item.moduleKey),
-            );
+                modules.includes(item.moduleKey);
+              const roleOk = role === null || roleCanSee(role, item.href);
+              return moduleOk && roleOk;
+            });
             if (visible.length === 0) return null; // empty section → no title
             return (
             <div key={si} className="nav-section">

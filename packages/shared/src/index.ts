@@ -9,6 +9,7 @@ export const ROLES = [
   "cashier",
   "storekeeper",
   "payroll",
+  "hr",
   "viewer",
 ] as const;
 

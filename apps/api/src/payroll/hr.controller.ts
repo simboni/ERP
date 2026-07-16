@@ -20,7 +20,7 @@ import {
 } from "../auth/guards";
 import { DbService } from "../db/db.service";
 
-const HR_ROLES = ["owner", "admin"] as const;
+const HR_ROLES = ["owner", "admin", "hr"] as const;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const NOTE_KINDS = ["performance", "training", "disciplinary", "general"];
 

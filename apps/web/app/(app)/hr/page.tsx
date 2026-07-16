@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, fmtKes0 } from "@/lib/api";
+import { ROLE_LABEL_KEY, useI18n } from "@/lib/i18n";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { DataTable } from "@/components/DataTable";
 import { SearchSelect } from "@/components/SearchSelect";
@@ -146,6 +147,9 @@ const initials = (name: string): string =>
     .toUpperCase();
 
 export default function HrPage() {
+  const { t } = useI18n();
+  const roleLabel = (r: string): string =>
+    ROLE_LABEL_KEY[r] ? t(ROLE_LABEL_KEY[r]) : r;
   const [tab, setTab] = useState<Tab>("overview");
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
@@ -1032,7 +1036,7 @@ export default function HrPage() {
                     <td>{m.full_name}</td>
                     <td className="muted">{m.email}</td>
                     <td>
-                      <span className="pill sent">{m.role}</span>
+                      <span className="pill sent">{roleLabel(m.role)}</span>
                     </td>
                     <td>
                       {m.role !== "owner" && (
@@ -1080,10 +1084,11 @@ export default function HrPage() {
                   "cashier",
                   "storekeeper",
                   "payroll",
+                  "hr",
                   "viewer",
                 ].map((r) => (
                   <option key={r} value={r}>
-                    {r}
+                    {roleLabel(r)}
                   </option>
                 ))}
               </select>

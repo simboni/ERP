@@ -3,9 +3,12 @@
  * balance enforcement, and announcements — via the controller class.
  */
 import { randomUUID } from "node:crypto";
+import { ForbiddenException } from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
 import type { TenantTokenClaims } from "@jenga/shared";
 import { DbService } from "../src/db/db.service";
 import { HrController } from "../src/payroll/hr.controller";
+import { RolesGuard } from "../src/auth/guards";
 
 process.env.APP_DB_URL =
   process.env.APP_DB_URL_TEST ??
@@ -136,5 +139,26 @@ describe("HR suite", () => {
     });
     const list = await hr.listAnnouncements(claims);
     expect(list[0].title).toBe("Eid holiday");
+  });
+
+  it("RolesGuard admits the hr role to HR mutations, forbids cashier", () => {
+    // @Roles(...HR_ROLES) on createDepartment now includes "hr". The guard is
+    // the real boundary; assert it honours the widened role set.
+    const rolesGuard = new RolesGuard(new Reflector());
+    const ctxFor = (rol: TenantTokenClaims["rol"]) =>
+      ({
+        getHandler: () => hr.createDepartment,
+        getClass: () => HrController,
+        switchToHttp: () => ({
+          getRequest: () => ({ claims: { ...claims, rol } }),
+        }),
+      }) as never;
+
+    expect(rolesGuard.canActivate(ctxFor("hr"))).toBe(true);
+    expect(rolesGuard.canActivate(ctxFor("owner"))).toBe(true);
+    expect(rolesGuard.canActivate(ctxFor("admin"))).toBe(true);
+    expect(() => rolesGuard.canActivate(ctxFor("cashier"))).toThrow(
+      ForbiddenException,
+    );
   });
 });

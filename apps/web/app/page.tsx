@@ -51,13 +51,21 @@ export default function AuthPage() {
     })();
   }, []);
 
-  const selectTenant = async (tenantId: string): Promise<void> => {
+  const selectTenant = async (m: Membership): Promise<void> => {
     const res = await api<{ accessToken: string }>("/auth/tenant-token", {
       method: "POST",
-      body: { tenantId },
+      body: { tenantId: m.tenantId },
     });
     setTenantToken(res.accessToken);
-    setTenantId(tenantId);
+    setTenantId(m.tenantId);
+    // Cache the active role so AppShell can scope the sidebar without a
+    // round-trip (mirrors jenga.tenantName / jenga.modules). Cleared on
+    // sign out alongside those.
+    try {
+      sessionStorage.setItem("jenga.role", m.role);
+    } catch {
+      /* private mode: AppShell falls back to decoding the token */
+    }
     router.push("/dashboard");
   };
 
@@ -90,7 +98,7 @@ export default function AuthPage() {
       if (login.refreshToken) setRefreshToken(login.refreshToken);
       const me = await api<{ memberships: Membership[] }>("/auth/me");
       if (me.memberships.length === 1) {
-        await selectTenant(me.memberships[0].tenantId);
+        await selectTenant(me.memberships[0]);
       } else {
         setMemberships(me.memberships);
       }
@@ -110,7 +118,7 @@ export default function AuthPage() {
             <strong>{m.tenantName}</strong>{" "}
             <span className="muted">({m.role})</span>
             <br />
-            <button onClick={() => void selectTenant(m.tenantId)}>{t("open")}</button>
+            <button onClick={() => void selectTenant(m)}>{t("open")}</button>
           </div>
         ))}
       </main>

@@ -301,6 +301,14 @@ const DICT = {
     rptCash: "Cash",
     rptBank: "Bank",
     rptMpesa: "M-Pesa",
+    roleOwner: "Owner",
+    roleAdmin: "Admin",
+    roleAccountant: "Accountant",
+    roleCashier: "Cashier",
+    roleStorekeeper: "Storekeeper",
+    rolePayroll: "Payroll",
+    roleHr: "HR",
+    roleViewer: "Viewer",
   },
   sw: {
     tagline: "Ankara za eTIMS · Ulinganisho wa M-Pesa · Hesabu safi",
@@ -594,10 +602,30 @@ const DICT = {
     rptCash: "Pesa taslimu",
     rptBank: "Benki",
     rptMpesa: "M-Pesa",
+    roleOwner: "Mmiliki",
+    roleAdmin: "Msimamizi",
+    roleAccountant: "Mhasibu",
+    roleCashier: "Keshia",
+    roleStorekeeper: "Mtunza ghala",
+    rolePayroll: "Mishahara",
+    roleHr: "Watumishi",
+    roleViewer: "Mtazamaji",
   },
 } as const;
 
 export type TKey = keyof (typeof DICT)["en"];
+
+/** Role → its i18n label key. Keeps role display strings translatable. */
+export const ROLE_LABEL_KEY: Record<string, TKey> = {
+  owner: "roleOwner",
+  admin: "roleAdmin",
+  accountant: "roleAccountant",
+  cashier: "roleCashier",
+  storekeeper: "roleStorekeeper",
+  payroll: "rolePayroll",
+  hr: "roleHr",
+  viewer: "roleViewer",
+};
 
 const LangContext = createContext<{
   lang: Lang;

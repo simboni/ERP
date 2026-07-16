@@ -155,3 +155,50 @@ export const PRESETS: Record<string, OptionalModuleKey[]> = {
 export function presetModules(type: string): OptionalModuleKey[] {
   return PRESETS[type] ?? PRESETS.general;
 }
+
+/**
+ * Role → the set of sidebar hrefs that role may see. This is a SECOND filter
+ * dimension on top of the tenant's enabled_modules: a nav item renders only
+ * when it clears BOTH gates. Owner and admin are special-cased to "all" (they
+ * see every enabled module) and never appear here. /dashboard is always
+ * allowed for every role; /settings is owner/admin only.
+ *
+ * This mirrors the API @Roles(...) guards — it is UX + defense-in-depth, never
+ * the security boundary. Keep it aligned with the guards, do not weaken them.
+ */
+export const ROLE_NAV: Record<string, string[]> = {
+  accountant: [
+    "/dashboard",
+    "/quotes",
+    "/invoices",
+    "/payments",
+    "/customers",
+    "/purchases",
+    "/suppliers",
+    "/inventory",
+    "/projects",
+    "/finance",
+    "/reports",
+    "/vat",
+    "/documents",
+  ],
+  cashier: ["/dashboard", "/pos", "/invoices", "/payments", "/customers", "/quotes"],
+  storekeeper: ["/dashboard", "/inventory", "/purchases", "/suppliers"],
+  payroll: ["/dashboard", "/payroll", "/hr"],
+  hr: ["/dashboard", "/hr"],
+  viewer: ["/dashboard", "/reports"],
+};
+
+/**
+ * Whether a role may see a given sidebar href. Owner/admin see everything;
+ * /dashboard is always allowed; /settings is owner/admin only; otherwise the
+ * href must be in that role's ROLE_NAV set. Unknown roles fall through to a
+ * dashboard-only view.
+ */
+export function roleCanSee(role: string | null | undefined, href: string): boolean {
+  if (role === "owner" || role === "admin") return true;
+  if (href === "/dashboard") return true;
+  if (href === "/settings") return false;
+  if (!role) return false;
+  return (ROLE_NAV[role] ?? []).includes(href);
+}
