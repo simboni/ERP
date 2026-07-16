@@ -2,13 +2,17 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from "@nestjs/common";
+import type { Response } from "express";
 import type { TenantTokenClaims } from "@jenga/shared";
 import { AuditService } from "../audit/audit.service";
 import {
@@ -22,6 +26,7 @@ import { DbService } from "../db/db.service";
 import { LedgerService } from "../ledger/ledger.service";
 import { InvoiceLineInput } from "./invoices.service";
 import { QuotesService } from "./quotes.service";
+import { renderInvoicePdf } from "./invoice-pdf";
 
 const SALES_ROLES = ["owner", "admin", "accountant", "cashier"] as const;
 const PERIOD_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -134,6 +139,96 @@ export class SalesExtrasController {
       );
       return res.rows;
     });
+  }
+
+  @Get("quotes/:id")
+  async quoteDetail(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) quoteId: string,
+  ) {
+    return this.db.withTenant(claims.tid, claims.sub, (client) =>
+      this.quotes.getDetail(client, quoteId),
+    );
+  }
+
+  @Get("quotes/:id/pdf")
+  async quotePdf(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) quoteId: string,
+    @Res() res: Response,
+  ) {
+    const data = await this.db.withTenant(claims.tid, claims.sub, (client) =>
+      this.quotes.getDetail(client, quoteId),
+    );
+    const pdf = await renderInvoicePdf({
+      businessName: data.business_name,
+      invoiceNo: `Q-${data.quote_no}`,
+      status: data.status,
+      issueDate: data.valid_until
+        ? new Date(data.valid_until).toISOString().slice(0, 10)
+        : null,
+      customerName: data.customer_name,
+      customerPin: data.customer_pin,
+      logo: data.logo || null,
+      lines: data.lines,
+      subtotalCents: Number(data.subtotal_cents),
+      vatCents: Number(data.vat_cents),
+      totalCents: Number(data.total_cents),
+      fiscal: { controlNumber: null, qrPayload: null, status: null },
+      documentTitle: "QUOTATION",
+      detailsTitle: "QUOTE DETAILS",
+      dateLabel: "Valid Until",
+      showFiscal: false,
+    });
+    res
+      .status(200)
+      .set({
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `inline; filename="quote-Q-${data.quote_no}.pdf"`,
+      })
+      .send(pdf);
+  }
+
+  @Patch("quotes/:id")
+  @Roles(...SALES_ROLES)
+  async updateQuote(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) quoteId: string,
+    @Body()
+    body: {
+      customerId?: string;
+      validUntil?: string | null;
+      lines?: InvoiceLineInput[];
+    },
+  ) {
+    if (!Array.isArray(body?.lines) || body.lines.length === 0) {
+      throw new BadRequestException("lines are required");
+    }
+    return this.db.withTenant(claims.tid, claims.sub, (client) =>
+      this.quotes.update(client, {
+        tenantId: claims.tid,
+        userId: claims.sub,
+        quoteId,
+        customerId: body.customerId,
+        validUntil: body.validUntil ?? null,
+        lines: body.lines!,
+      }),
+    );
+  }
+
+  @Delete("quotes/:id")
+  @Roles(...SALES_ROLES)
+  async deleteQuote(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) quoteId: string,
+  ) {
+    return this.db.withTenant(claims.tid, claims.sub, (client) =>
+      this.quotes.remove(client, {
+        tenantId: claims.tid,
+        userId: claims.sub,
+        quoteId,
+      }),
+    );
   }
 
   /** Sales report: issued+paid invoices grouped by day, customer or item. */

@@ -20,6 +20,11 @@ export interface InvoicePdfData {
   vatCents: number;
   totalCents: number;
   fiscal: { controlNumber: string | null; qrPayload: string | null; status: string | null };
+  /** Optional overrides so the same layout renders quotations etc. */
+  documentTitle?: string; // default "TAX INVOICE"
+  detailsTitle?: string; // default "INVOICE DETAILS"
+  dateLabel?: string; // default "Invoice Date"
+  showFiscal?: boolean; // default true
 }
 
 const kes = (c: number | string): string =>
@@ -47,7 +52,7 @@ export function renderInvoicePdf(data: InvoicePdfData): Promise<Buffer> {
     // Business name and invoice title on the right
     const titleX = data.logo ? 300 : 48;
     doc.fontSize(24).font("Helvetica-Bold").text(data.businessName, titleX, headerY);
-    doc.fontSize(14).fillColor("#666").text(`TAX INVOICE`, titleX, doc.y);
+    doc.fontSize(14).fillColor("#666").text(data.documentTitle ?? "TAX INVOICE", titleX, doc.y);
     doc.fontSize(11).fillColor("#999").text(
       `${data.invoiceNo ? `#${data.invoiceNo}` : "(draft)"}`,
       titleX,
@@ -70,9 +75,9 @@ export function renderInvoicePdf(data: InvoicePdfData): Promise<Buffer> {
     }
 
     const detailsY = doc.y - 30;
-    doc.fillColor("#000").fontSize(10).font("Helvetica-Bold").text("INVOICE DETAILS", detailsX, detailsY);
+    doc.fillColor("#000").fontSize(10).font("Helvetica-Bold").text(data.detailsTitle ?? "INVOICE DETAILS", detailsX, detailsY);
     doc.fontSize(9).fillColor("#666").font("Helvetica");
-    doc.text(`Invoice Date: ${data.issueDate ?? "—"}`, detailsX, doc.y);
+    doc.text(`${data.dateLabel ?? "Invoice Date"}: ${data.issueDate ?? "—"}`, detailsX, doc.y);
     doc.text(`Status: ${data.status}`, detailsX, doc.y);
 
     doc.moveDown(1);
@@ -163,16 +168,18 @@ export function renderInvoicePdf(data: InvoicePdfData): Promise<Buffer> {
     doc.text("TOTAL [KES]:", summaryLabelX, doc.y, { width: 100 });
     doc.text(kes(data.totalCents), summaryValueX, doc.y - 13.5, { align: "right" });
 
-    // Fiscal information
-    doc.moveDown(1.5);
-    doc.fontSize(8).fillColor("#999").font("Helvetica");
-    if (data.fiscal.controlNumber) {
-      doc.text(`KRA eTIMS Control Number: ${data.fiscal.controlNumber}`);
-      if (data.fiscal.qrPayload) {
-        doc.text(`Verify at: ${data.fiscal.qrPayload}`, { underline: true });
+    // Fiscal information (invoices only)
+    if (data.showFiscal !== false) {
+      doc.moveDown(1.5);
+      doc.fontSize(8).fillColor("#999").font("Helvetica");
+      if (data.fiscal.controlNumber) {
+        doc.text(`KRA eTIMS Control Number: ${data.fiscal.controlNumber}`);
+        if (data.fiscal.qrPayload) {
+          doc.text(`Verify at: ${data.fiscal.qrPayload}`, { underline: true });
+        }
+      } else {
+        doc.text(`eTIMS Status: ${data.fiscal.status ?? "not fiscalized"}`);
       }
-    } else {
-      doc.text(`eTIMS Status: ${data.fiscal.status ?? "not fiscalized"}`);
     }
 
     // Footer

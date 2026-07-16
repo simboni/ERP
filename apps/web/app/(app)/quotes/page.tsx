@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { api, fmtKes, getTenantToken } from "@/lib/api";
+import {
+  api,
+  fmtKes,
+  getApiBaseSync,
+  getTenantToken,
+} from "@/lib/api";
 import { DataTable } from "@/components/DataTable";
 import { SearchSelect } from "@/components/SearchSelect";
 
@@ -18,6 +23,27 @@ interface Quote {
 }
 interface Branch { id: string }
 interface Customer { id: string; name: string }
+interface EditLine {
+  description: string;
+  quantity: string;
+  priceKes: string;
+  vatRate: string;
+}
+interface QuoteDetail {
+  id: string;
+  quote_no: string;
+  status: string;
+  customer_id: string;
+  valid_until: string | null;
+  lines: Array<{
+    description: string;
+    quantity: string;
+    unit_price_cents: string;
+    vat_rate: string;
+  }>;
+}
+
+const EDITABLE = ["draft", "sent", "accepted", "expired"];
 
 export default function QuotesPage() {
   const router = useRouter();
@@ -31,6 +57,12 @@ export default function QuotesPage() {
   const [priceKes, setPriceKes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  // Edit modal state
+  const [editing, setEditing] = useState<QuoteDetail | null>(null);
+  const [editCustomer, setEditCustomer] = useState("");
+  const [editValidUntil, setEditValidUntil] = useState("");
+  const [editLines, setEditLines] = useState<EditLine[]>([]);
 
   const load = useCallback(async (): Promise<void> => {
     const [q, c, b] = await Promise.all([
@@ -112,6 +144,80 @@ export default function QuotesPage() {
       router.push(`/invoices/view?id=${r.invoiceId}`);
     });
 
+  const download = (q: Quote): void => {
+    void fetch(`${getApiBaseSync()}/tenants/current/quotes/${q.id}/pdf`, {
+      headers: { Authorization: `Bearer ${getTenantToken()}` },
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error("Could not generate PDF");
+        return r.blob();
+      })
+      .then((blob) => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `quote-Q-${q.quote_no}.pdf`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "download failed"));
+  };
+
+  const del = (q: Quote) =>
+    act(async () => {
+      if (
+        typeof window !== "undefined" &&
+        !window.confirm(`Delete quote Q-${q.quote_no}? This cannot be undone.`)
+      ) {
+        return;
+      }
+      await api(`/tenants/current/quotes/${q.id}`, { method: "DELETE" });
+    });
+
+  const openEdit = async (id: string): Promise<void> => {
+    setError("");
+    try {
+      const d = await api<QuoteDetail>(`/tenants/current/quotes/${id}`);
+      setEditing(d);
+      setEditCustomer(d.customer_id);
+      setEditValidUntil(d.valid_until ? d.valid_until.slice(0, 10) : "");
+      setEditLines(
+        d.lines.map((l) => ({
+          description: l.description,
+          quantity: String(Number(l.quantity)),
+          priceKes: (Number(l.unit_price_cents) / 100).toString(),
+          vatRate: l.vat_rate,
+        })),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "could not open quote");
+    }
+  };
+
+  const saveEdit = act(async () => {
+    if (!editing) return;
+    const lines = editLines
+      .filter((l) => l.description.trim())
+      .map((l) => ({
+        description: l.description.trim(),
+        quantity: Number(l.quantity) || 0,
+        unitPriceCents: Math.round(Number(l.priceKes) * 100),
+        vatRate: l.vatRate,
+      }));
+    if (!lines.length) throw new Error("Add at least one line");
+    await api(`/tenants/current/quotes/${editing.id}`, {
+      method: "PATCH",
+      body: {
+        customerId: editCustomer || undefined,
+        validUntil: editValidUntil || null,
+        lines,
+      },
+    });
+    setEditing(null);
+  });
+
+  const setLine = (i: number, patch: Partial<EditLine>): void =>
+    setEditLines((prev) => prev.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+
   return (
     <>
       <p><Link href="/dashboard">← Dashboard</Link></p>
@@ -192,26 +298,123 @@ export default function QuotesPage() {
               label: "",
               value: () => "",
               render: (q) => (
-                <>
+                <div className="quote-actions">
+                  <button className="btn-sm" disabled={busy} onClick={() => download(q)}>
+                    Download
+                  </button>
+                  {EDITABLE.includes(q.status) && (
+                    <button className="btn-sm" disabled={busy} onClick={() => void openEdit(q.id)}>
+                      Edit
+                    </button>
+                  )}
                   {["draft", "sent", "accepted"].includes(q.status) && (
-                    <button
-                      disabled={busy}
-                      onClick={() => void convert(q.id)()}
-                    >
-                      Convert to invoice
+                    <button className="btn-sm" disabled={busy} onClick={() => void convert(q.id)()}>
+                      Convert
+                    </button>
+                  )}
+                  {!q.invoice_id && q.status !== "converted" && (
+                    <button className="btn-sm danger" disabled={busy} onClick={() => void del(q)()}>
+                      Delete
                     </button>
                   )}
                   {q.invoice_id && (
-                    <Link href={`/invoices/view?id=${q.invoice_id}`}>
-                      invoice →
-                    </Link>
+                    <Link href={`/invoices/view?id=${q.invoice_id}`}>invoice →</Link>
                   )}
-                </>
+                </div>
               ),
             },
           ]}
         />
       </div>
+
+      {editing && (
+        <div className="modal-overlay" onClick={() => setEditing(null)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-top">
+              <h2 style={{ margin: 0 }}>Edit quote Q-{editing.quote_no}</h2>
+              <button className="btn-sm" onClick={() => setEditing(null)}>✕</button>
+            </div>
+            <div className="row">
+              <div style={{ flex: 1 }}>
+                <label>Customer</label>
+                <SearchSelect
+                  options={customers.map((c) => ({ id: c.id, label: c.name }))}
+                  value={editCustomer}
+                  onChange={setEditCustomer}
+                  placeholder="Search customers…"
+                />
+              </div>
+              <div>
+                <label>Valid until</label>
+                <input
+                  type="date"
+                  value={editValidUntil}
+                  onChange={(e) => setEditValidUntil(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <label style={{ marginTop: 12 }}>Line items</label>
+            {editLines.map((l, i) => (
+              <div className="row quote-edit-line" key={i}>
+                <div style={{ flex: 3 }}>
+                  <input
+                    placeholder="Description"
+                    value={l.description}
+                    onChange={(e) => setLine(i, { description: e.target.value })}
+                  />
+                </div>
+                <div style={{ width: 80 }}>
+                  <input
+                    type="number" min="0.001" step="any" placeholder="Qty"
+                    value={l.quantity}
+                    onChange={(e) => setLine(i, { quantity: e.target.value })}
+                  />
+                </div>
+                <div style={{ width: 120 }}>
+                  <input
+                    type="number" min="0" step="0.01" placeholder="Price (KES)"
+                    value={l.priceKes}
+                    onChange={(e) => setLine(i, { priceKes: e.target.value })}
+                  />
+                </div>
+                <div style={{ width: 110 }}>
+                  <select value={l.vatRate} onChange={(e) => setLine(i, { vatRate: e.target.value })}>
+                    <option value="0.16">VAT 16%</option>
+                    <option value="0">Zero-rated</option>
+                    <option value="exempt">Exempt</option>
+                  </select>
+                </div>
+                <button
+                  className="btn-sm danger"
+                  disabled={editLines.length <= 1}
+                  onClick={() => setEditLines((prev) => prev.filter((_, j) => j !== i))}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            <button
+              className="btn-sm"
+              onClick={() =>
+                setEditLines((prev) => [
+                  ...prev,
+                  { description: "", quantity: "1", priceKes: "", vatRate: "0.16" },
+                ])
+              }
+            >
+              + Add line
+            </button>
+
+            <div className="modal-actions">
+              <button className="ghost" onClick={() => setEditing(null)}>Cancel</button>
+              <button disabled={busy} onClick={() => void saveEdit()}>
+                Save changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
