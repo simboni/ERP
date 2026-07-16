@@ -1,9 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "@/lib/api";
+import { api, getApiBaseSync, getTenantToken } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import styles from "./chat.module.css";
+
+interface PendingFile {
+  name: string;
+  mime: string;
+  dataBase64: string;
+  size: number;
+}
+
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
 interface Message {
   id: string;
@@ -73,8 +82,16 @@ export default function ChatPage() {
   const [newTab, setNewTab] = useState<"people" | "departments" | "everyone">("people");
   const [peopleSearch, setPeopleSearch] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
 
   const messageListRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Full-bleed: let the chat own the whole area below the top bar.
+  useEffect(() => {
+    document.body.classList.add("chat-fullbleed");
+    return () => document.body.classList.remove("chat-fullbleed");
+  }, []);
 
   const loadConversations = useCallback(async () => {
     try {
@@ -221,7 +238,8 @@ export default function ChatPage() {
 
   const sendMessage = async () => {
     const content = messageContent.trim();
-    if (!content || !selectedConversationId || sending) return;
+    if ((!content && pendingFiles.length === 0) || !selectedConversationId || sending)
+      return;
     setSending(true);
     try {
       const res = await api<Message>("/chat/messages", {
@@ -230,17 +248,68 @@ export default function ChatPage() {
           conversationId: selectedConversationId,
           content,
           replyToId: replyingTo?.id || undefined,
+          attachments: pendingFiles.map((f) => ({
+            name: f.name,
+            mime: f.mime,
+            dataBase64: f.dataBase64,
+          })),
         },
       });
       setMessages((prev) => [...prev, res]);
       setMessageContent("");
       setReplyingTo(null);
+      setPendingFiles([]);
       loadConversations();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send message");
     } finally {
       setSending(false);
     }
+  };
+
+  const onFilesPicked = async (fileList: FileList | null) => {
+    if (!fileList) return;
+    const picks: PendingFile[] = [];
+    for (const file of Array.from(fileList)) {
+      if (file.size > MAX_FILE_BYTES) {
+        setError(`"${file.name}" is larger than 5MB`);
+        continue;
+      }
+      const dataBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          resolve(result.includes(",") ? result.split(",")[1] : result);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      picks.push({
+        name: file.name,
+        mime: file.type || "application/octet-stream",
+        dataBase64,
+        size: file.size,
+      });
+    }
+    setPendingFiles((prev) => [...prev, ...picks]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const downloadAttachment = (documentId: string | null, fileName: string) => {
+    if (!documentId) return;
+    void fetch(
+      `${getApiBaseSync()}/tenants/current/documents/${documentId}/download`,
+      { headers: { Authorization: `Bearer ${getTenantToken()}` } },
+    )
+      .then((r) => r.blob())
+      .then((blob) => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      })
+      .catch(() => setError("Failed to download attachment"));
   };
 
   const refreshMessages = async () => {
@@ -384,14 +453,16 @@ export default function ChatPage() {
                         {msg.hasAttachments && msg.attachments.length > 0 && (
                           <div className={styles.attachments}>
                             {msg.attachments.map((att) => (
-                              <a
+                              <button
                                 key={att.id}
-                                href="#"
                                 className={styles.attachment}
                                 title={att.fileName}
+                                onClick={() =>
+                                  downloadAttachment(att.documentId, att.fileName)
+                                }
                               >
                                 📎 {att.fileName}
-                              </a>
+                              </button>
                             ))}
                           </div>
                         )}
@@ -466,7 +537,39 @@ export default function ChatPage() {
               </div>
             )}
 
+            {pendingFiles.length > 0 && (
+              <div className={styles.pendingFiles}>
+                {pendingFiles.map((f, i) => (
+                  <span key={i} className={styles.pendingChip}>
+                    📎 {f.name}
+                    <button
+                      onClick={() =>
+                        setPendingFiles((prev) => prev.filter((_, j) => j !== i))
+                      }
+                      aria-label="Remove"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
             <div className={styles.composer}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                style={{ display: "none" }}
+                onChange={(e) => onFilesPicked(e.target.files)}
+              />
+              <button
+                className={styles.attachButton}
+                title={t("attachFile")}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                📎
+              </button>
               <textarea
                 value={messageContent}
                 onChange={(e) => setMessageContent(e.target.value)}
@@ -483,7 +586,7 @@ export default function ChatPage() {
               <button
                 onClick={sendMessage}
                 className={styles.sendButton}
-                disabled={sending || !messageContent.trim()}
+                disabled={sending || (!messageContent.trim() && pendingFiles.length === 0)}
               >
                 {t("send")}
               </button>

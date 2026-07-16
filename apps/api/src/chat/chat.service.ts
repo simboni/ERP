@@ -3,6 +3,8 @@ import type { PoolClient } from "pg";
 import { DbService } from "../db/db.service";
 import type { TenantTokenClaims } from "@jenga/shared";
 
+const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024; // 5MB, matching the Documents module
+
 export interface Message {
   id: string;
   conversationId: string;
@@ -226,14 +228,21 @@ export class ChatService {
   }
 
   /**
-   * Send a message to a conversation.
+   * Send a message to a conversation. Any files attached are stored in the
+   * Documents module (in a per-tenant "Chat" folder, so the user can
+   * re-organise them later) and linked to the message.
    */
   async sendMessage(
     claims: TenantTokenClaims,
     conversationId: string,
     content: string,
     replyToId?: string,
+    attachments?: Array<{ name: string; mime?: string; dataBase64: string }>,
   ): Promise<Message> {
+    const files = (attachments ?? []).filter((f) => f?.dataBase64 && f?.name);
+    if (!content.trim() && files.length === 0) {
+      throw new NotFoundException("Message must have text or an attachment");
+    }
     return this.db.withTenant(claims.tid, claims.sub, async (client) => {
       // Verify access
       await this.verifyConversationAccess(client, claims.tid, conversationId, claims.sub);
@@ -241,11 +250,53 @@ export class ChatService {
       // Insert message
       const msg = await client.query(
         `INSERT INTO chat_messages
-         (conversation_id, sender_id, content, reply_to_id)
-         VALUES ($1, $2, $3, $4)
+         (conversation_id, sender_id, content, reply_to_id, has_attachments)
+         VALUES ($1, $2, $3, $4, $5)
          RETURNING id, created_at, updated_at`,
-        [conversationId, claims.sub, content, replyToId || null],
+        [conversationId, claims.sub, content, replyToId || null, files.length > 0],
       );
+      const messageId = msg.rows[0].id;
+
+      const savedAttachments: Array<{
+        id: string;
+        fileName: string;
+        documentId: string | null;
+      }> = [];
+      if (files.length > 0) {
+        const folderId = await this.getOrCreateChatFolder(client, claims.sub);
+        for (const f of files) {
+          const bytes = Buffer.from(f.dataBase64, "base64");
+          if (bytes.length === 0) continue;
+          if (bytes.length > MAX_ATTACHMENT_BYTES) {
+            throw new NotFoundException(
+              `File too large: ${Math.round(bytes.length / 1024 / 1024)}MB (max 5MB)`,
+            );
+          }
+          const mime = f.mime?.trim() || "application/octet-stream";
+          const name = f.name.trim().slice(0, 200);
+          // File into the Documents module so it lives on beyond the chat.
+          const doc = await client.query(
+            `INSERT INTO documents
+               (tenant_id, name, mime, size_bytes, data, uploaded_by,
+                folder_id, category, description)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, 'other', 'Shared in chat')
+             RETURNING id`,
+            [claims.tid, name, mime, bytes.length, bytes, claims.sub, folderId],
+          );
+          const att = await client.query(
+            `INSERT INTO chat_attachments
+               (message_id, document_id, file_name, file_size, mime_type)
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING id`,
+            [messageId, doc.rows[0].id, name, bytes.length, mime],
+          );
+          savedAttachments.push({
+            id: att.rows[0].id,
+            fileName: name,
+            documentId: doc.rows[0].id,
+          });
+        }
+      }
 
       // Update conversation timestamp
       await client.query(
@@ -261,20 +312,46 @@ export class ChatService {
         [conversationId, claims.sub],
       );
 
+      const me = await client.query(
+        `SELECT full_name FROM users WHERE id = $1`,
+        [claims.sub],
+      );
+
       return {
-        id: msg.rows[0].id,
+        id: messageId,
         conversationId,
         senderId: claims.sub,
-        senderName: "",
+        senderName: me.rows[0]?.full_name ?? "",
         content,
         createdAt: msg.rows[0].created_at,
         updatedAt: msg.rows[0].updated_at,
         replyToId: replyToId || null,
-        hasAttachments: false,
-        attachments: [],
+        hasAttachments: savedAttachments.length > 0,
+        attachments: savedAttachments,
         reactions: [],
       };
     });
+  }
+
+  /**
+   * Get or create the tenant's "Chat" documents folder so chat uploads are
+   * filed somewhere the user can later re-organise.
+   */
+  private async getOrCreateChatFolder(
+    client: PoolClient,
+    userId: string,
+  ): Promise<string> {
+    const existing = await client.query(
+      `SELECT id FROM document_folders WHERE name = 'Chat' AND parent_id IS NULL LIMIT 1`,
+    );
+    if (existing.rows[0]) return existing.rows[0].id;
+    const created = await client.query(
+      `INSERT INTO document_folders (tenant_id, name, parent_id, created_by)
+       VALUES (current_setting('app.current_tenant')::uuid, 'Chat', NULL, $1)
+       RETURNING id`,
+      [userId],
+    );
+    return created.rows[0].id;
   }
 
   /**
@@ -477,7 +554,8 @@ export class ChatService {
     client: any,
   ): Promise<Message> {
     const attachments = await client.query(
-      `SELECT id, file_name, document_id FROM chat_attachments WHERE message_id = $1`,
+      `SELECT id, file_name AS "fileName", document_id AS "documentId"
+       FROM chat_attachments WHERE message_id = $1`,
       [row.id],
     );
 

@@ -94,8 +94,16 @@ export class ChatController {
     @Body("conversationId") conversationId: string,
     @Body("content") content: string,
     @Body("replyToId") replyToId?: string,
+    @Body("attachments")
+    attachments?: Array<{ name: string; mime?: string; dataBase64: string }>,
   ): Promise<Message> {
-    return this.chatService.sendMessage(claims, conversationId, content, replyToId);
+    return this.chatService.sendMessage(
+      claims,
+      conversationId,
+      content ?? "",
+      replyToId,
+      attachments,
+    );
   }
 
   @Post("messages/:messageId/reactions")
