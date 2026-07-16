@@ -158,7 +158,7 @@ export class PayrollController {
   ) {
     const data = await this.db.withTenant(claims.tid, claims.sub, async (client) => {
       const r = await client.query(
-        `SELECT pi.*, e.full_name, e.kra_pin, pr.period, pr.status, t.name AS business_name
+        `SELECT pi.*, e.full_name, e.kra_pin, pr.period, pr.status, t.name AS business_name, t.logo
          FROM payroll_items pi
          JOIN employees e ON e.id = pi.employee_id
          JOIN payroll_runs pr ON pr.id = pi.run_id
@@ -177,6 +177,7 @@ export class PayrollController {
       period: data.period,
       employeeName: data.full_name,
       kraPin: data.kra_pin,
+      logo: data.logo || null,
       grossCents: Number(data.gross_cents),
       taxableCents: Number(data.taxable_cents),
       payeCents: Number(data.paye_cents),

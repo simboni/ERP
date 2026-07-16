@@ -35,6 +35,7 @@ interface Profile {
   enabled_modules: string[];
   next_invoice_no: number;
   next_quote_no: number;
+  logo: string | null;
 }
 
 /** Reads the current member's role from the tenant JWT for read-only gating. */
@@ -185,6 +186,48 @@ export default function SettingsPage() {
       };
     });
 
+
+  const uploadLogo = async (file: File): Promise<void> => {
+    if (!profile) return;
+    setBusy(true);
+    setError("");
+    setMsg("");
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64 = e.target?.result as string;
+        await api("/tenants/current/profile", {
+          method: "PATCH",
+          body: { logo: base64 },
+        });
+        setProfile((p) => (p ? { ...p, logo: base64 } : p));
+        setMsg(t("setSaved"));
+      };
+      reader.readAsDataURL(file);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to upload logo");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeLogo = async (): Promise<void> => {
+    if (!profile) return;
+    setBusy(true);
+    setError("");
+    try {
+      await api("/tenants/current/profile", {
+        method: "PATCH",
+        body: { logo: null },
+      });
+      setProfile((p) => (p ? { ...p, logo: null } : p));
+      setMsg(t("setSaved"));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to remove logo");
+    } finally {
+      setBusy(false);
+    }
+  };
   const addBranch = act(async () => {
     await api("/tenants/current/branches", {
       method: "POST",
@@ -410,6 +453,39 @@ export default function SettingsPage() {
             style={{ maxWidth: 120, textTransform: "uppercase" }}
             onChange={(e) => patchField("currency", e.target.value.toUpperCase())}
           />
+          <label>Logo</label>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {profile.logo && (
+              <img
+                src={profile.logo}
+                alt="Logo"
+                style={{ maxHeight: 80, maxWidth: 200, borderRadius: 4 }}
+              />
+            )}
+            <div>
+              <input
+                type="file"
+                accept="image/*"
+                disabled={busy}
+                onChange={(e) => {
+                  if (e.target.files?.[0]) {
+                    void uploadLogo(e.target.files[0]);
+                  }
+                }}
+                style={{ marginBottom: 8, display: "block" }}
+              />
+              {profile.logo && (
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() => void removeLogo()}
+                >
+                  Remove logo
+                </button>
+              )}
+            </div>
+          </div>
           <p className="muted">{t("setOwnerOnly")}</p>
           <button
             disabled={busy}

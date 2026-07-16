@@ -5,6 +5,7 @@ export interface PayslipData {
   period: string;
   employeeName: string;
   kraPin: string | null;
+  logo: string | null;
   grossCents: number;
   taxableCents: number;
   payeCents: number;
@@ -25,9 +26,18 @@ export function renderPayslipPdf(data: PayslipData): Promise<Buffer> {
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    doc.fontSize(14).text(data.businessName);
+    // Logo and header
+    const headerY = doc.y;
+    if (data.logo) {
+      try {
+        doc.image(data.logo, 36, headerY, { height: 50 });
+      } catch {
+        // Logo failed, continue
+      }
+    }
+    doc.fontSize(14).text(data.businessName, data.logo ? 120 : 36, headerY);
     doc.fontSize(10).fillColor("#555").text(`PAYSLIP — ${data.period}`);
-    doc.moveDown();
+    doc.moveDown(0.5);
     doc.fillColor("#000").fontSize(11).text(data.employeeName);
     if (data.kraPin) doc.fontSize(9).fillColor("#555").text(`KRA PIN: ${data.kraPin}`);
     doc.moveDown();

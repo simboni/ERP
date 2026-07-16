@@ -263,7 +263,7 @@ export class InvoicesController {
     const data = await this.db.withTenant(claims.tid, claims.sub, async (client) => {
       const inv = await client.query(
         `SELECT i.*, c.name AS customer_name, c.kra_pin AS customer_pin,
-                t.name AS business_name,
+                t.name AS business_name, t.logo,
                 f.status AS fiscal_status, f.control_number, f.qr_payload
          FROM invoices i
          JOIN customers c ON c.id = i.customer_id
@@ -290,6 +290,7 @@ export class InvoicesController {
         : null,
       customerName: data.customer_name,
       customerPin: data.customer_pin,
+      logo: data.logo || null,
       lines: data.lines,
       subtotalCents: Number(data.subtotal_cents),
       vatCents: Number(data.vat_cents),

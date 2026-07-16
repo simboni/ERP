@@ -44,7 +44,7 @@ export class SettingsController {
     postal_address, physical_address, currency,
     fiscal_year_start_month, invoice_footer, invoice_prefix,
     quote_prefix, default_vat_rate, prices_vat_inclusive,
-    default_payment_terms_days, business_type, enabled_modules`;
+    default_payment_terms_days, business_type, enabled_modules, logo`;
 
   @Get("profile")
   async getProfile(@TenantClaims() claims: TenantTokenClaims) {
@@ -172,6 +172,28 @@ export class SettingsController {
       const unique = [...new Set(mods as string[])];
       sets.push(`enabled_modules = $${i++}`);
       params.push(unique);
+    }
+
+    if (body.logo !== undefined) {
+      const logo = body.logo;
+      if (logo !== null && typeof logo !== "string") {
+        throw new BadRequestException("logo must be a data URL or null");
+      }
+      if (
+        logo &&
+        !logo.startsWith("data:image/") &&
+        !logo.startsWith("data:application/")
+      ) {
+        throw new BadRequestException(
+          "logo must be a data URL (data:image/...)",
+        );
+      }
+      // Limit logo size to 500KB to prevent bloating the tenant row.
+      if (logo && logo.length > 500 * 1024) {
+        throw new BadRequestException("logo must be under 500KB");
+      }
+      sets.push(`logo = $${i++}`);
+      params.push(logo || null);
     }
 
     if (sets.length === 0) {
