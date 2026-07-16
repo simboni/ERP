@@ -64,6 +64,42 @@ function iconFor(type: Conversation["type"]): string {
   return "";
 }
 
+/** Two-letter initials for avatars. */
+function initials(name: string): string {
+  const parts = (name || "?").trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "?";
+}
+
+/** Deterministic avatar colour bucket (0-3) from a name. */
+function colorBucket(name: string): number {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
+  return Math.abs(h) % 4;
+}
+
+function shortTime(iso: string): string {
+  try {
+    return new Date(iso).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "";
+  }
+}
+
+/** Decode the current user id (sub) from the tenant JWT for own/other alignment. */
+function currentUserId(): string | null {
+  const tok = getTenantToken();
+  if (!tok) return null;
+  try {
+    const part = tok.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    return JSON.parse(atob(part)).sub ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export default function ChatPage() {
   const { t } = useI18n();
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -86,6 +122,7 @@ export default function ChatPage() {
 
   const messageListRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [me] = useState<string | null>(currentUserId);
 
   // Full-bleed: let the chat own the whole area below the top bar.
   useEffect(() => {
@@ -366,14 +403,18 @@ export default function ChatPage() {
       <div className={styles.sidebar}>
         <div className={styles.sidebarHeader}>
           <h2>{t("chat")}</h2>
-          <button
-            className={styles.newButton}
-            title={t("newMessage")}
-            onClick={openNewModal}
-          >
-            +
-          </button>
         </div>
+        <button className={styles.newMessageBtn} onClick={openNewModal}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <path
+              d="M12 5v14M5 12h14"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+            />
+          </svg>
+          {t("newMessage")}
+        </button>
 
         <div className={styles.conversationList}>
           {conversations.length === 0 ? (
@@ -387,19 +428,35 @@ export default function ChatPage() {
                 }`}
                 onClick={() => setSelectedConversationId(conv.id)}
               >
-                <div className={styles.convName}>
-                  <div className={styles.convTitle}>
-                    {iconFor(conv.type)} {conv.name}
+                <span
+                  className={`${styles.avatar} ${styles["c" + colorBucket(conv.name)]}`}
+                >
+                  {conv.type === "broadcast"
+                    ? "📢"
+                    : conv.type === "department"
+                      ? "#"
+                      : initials(conv.name)}
+                </span>
+                <div className={styles.convBody}>
+                  <div className={styles.convRow}>
+                    <span className={styles.convTitle}>{conv.name}</span>
+                    {conv.lastMessage && (
+                      <span className={styles.convTime}>
+                        {shortTime(conv.lastMessage.createdAt)}
+                      </span>
+                    )}
                   </div>
-                  {conv.unreadCount > 0 && (
-                    <span className={styles.badge}>{conv.unreadCount}</span>
-                  )}
+                  <div className={styles.convRow}>
+                    <span className={styles.convPreview}>
+                      {conv.lastMessage
+                        ? conv.lastMessage.content.substring(0, 38) || "📎 Attachment"
+                        : "No messages yet"}
+                    </span>
+                    {conv.unreadCount > 0 && (
+                      <span className={styles.badge}>{conv.unreadCount}</span>
+                    )}
+                  </div>
                 </div>
-                {conv.lastMessage && (
-                  <div className={styles.convPreview}>
-                    {conv.lastMessage.content.substring(0, 40)}
-                  </div>
-                )}
               </div>
             ))
           )}
@@ -427,10 +484,17 @@ export default function ChatPage() {
         {selectedConversation ? (
           <>
             <div className={styles.header}>
+              <span
+                className={`${styles.avatar} ${styles.avatarLg} ${styles["c" + colorBucket(selectedConversation.name)]}`}
+              >
+                {selectedConversation.type === "broadcast"
+                  ? "📢"
+                  : selectedConversation.type === "department"
+                    ? "#"
+                    : initials(selectedConversation.name)}
+              </span>
               <div>
-                <h1>
-                  {iconFor(selectedConversation.type)} {selectedConversation.name}
-                </h1>
+                <h1>{selectedConversation.name}</h1>
                 <div className={styles.participantStatus}>
                   {headerSubtitle(selectedConversation)}
                 </div>
@@ -439,33 +503,125 @@ export default function ChatPage() {
 
             <div className={styles.messageList} ref={messageListRef}>
               {messages.length === 0 ? (
-                <div className={styles.emptyState}>{t("noMessages")}</div>
+                <div className={styles.emptyThread}>
+                  <div className={styles.emptyThreadIcon}>💬</div>
+                  {t("noMessages")}
+                </div>
               ) : (
-                messages.map((msg) => (
-                  <div key={msg.id} className={styles.messageContainer}>
-                    {msg.replyToId && (
-                      <div className={styles.threadContext}>↳ {t("replyingTo")}…</div>
-                    )}
-                    <div className={styles.messageGroup}>
-                      <div className={styles.messageSender}>{msg.senderName}</div>
-                      <div className={styles.message}>
-                        <div className={styles.messageContent}>{msg.content}</div>
-                        {msg.hasAttachments && msg.attachments.length > 0 && (
-                          <div className={styles.attachments}>
-                            {msg.attachments.map((att) => (
-                              <button
-                                key={att.id}
-                                className={styles.attachment}
-                                title={att.fileName}
-                                onClick={() =>
-                                  downloadAttachment(att.documentId, att.fileName)
-                                }
-                              >
-                                📎 {att.fileName}
-                              </button>
-                            ))}
-                          </div>
+                messages.map((msg, i) => {
+                  const isOwn = !!me && msg.senderId === me;
+                  const prev = messages[i - 1];
+                  const grouped =
+                    prev && prev.senderId === msg.senderId && !msg.replyToId;
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`${styles.msgRow} ${isOwn ? styles.own : styles.other}`}
+                    >
+                      {!isOwn &&
+                        (grouped ? (
+                          <span className={styles.avatarSpacer} />
+                        ) : (
+                          <span
+                            className={`${styles.avatar} ${styles.avatarSm} ${styles["c" + colorBucket(msg.senderName)]}`}
+                          >
+                            {initials(msg.senderName)}
+                          </span>
+                        ))}
+                      <div className={styles.msgCol}>
+                        {!isOwn && !grouped && (
+                          <div className={styles.msgSender}>{msg.senderName}</div>
                         )}
+                        {msg.replyToId && (
+                          <div className={styles.replyRef}>↳ {t("replyingTo")}…</div>
+                        )}
+                        <div className={styles.bubbleWrap}>
+                          <div className={styles.bubble}>
+                            {msg.content && (
+                              <div className={styles.msgText}>{msg.content}</div>
+                            )}
+                            {msg.hasAttachments && msg.attachments.length > 0 && (
+                              <div className={styles.attachments}>
+                                {msg.attachments.map((att) => (
+                                  <button
+                                    key={att.id}
+                                    className={styles.attachment}
+                                    title={att.fileName}
+                                    onClick={() =>
+                                      downloadAttachment(att.documentId, att.fileName)
+                                    }
+                                  >
+                                    <span className={styles.attachIcon}>📄</span>
+                                    <span className={styles.attachName}>
+                                      {att.fileName}
+                                    </span>
+                                    <svg
+                                      width="14"
+                                      height="14"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      aria-hidden
+                                    >
+                                      <path
+                                        d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"
+                                        stroke="currentColor"
+                                        strokeWidth="2"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      />
+                                    </svg>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                            <span className={styles.msgTime}>
+                              {shortTime(msg.createdAt)}
+                            </span>
+                          </div>
+
+                          <div className={styles.msgActions}>
+                            <button
+                              className={styles.actionBtn}
+                              title="React"
+                              onClick={() =>
+                                setShowReactionPicker(
+                                  showReactionPicker === msg.id ? null : msg.id,
+                                )
+                              }
+                            >
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+                                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+                                <circle cx="9" cy="10" r="1.2" fill="currentColor" />
+                                <circle cx="15" cy="10" r="1.2" fill="currentColor" />
+                                <path d="M8.5 14.5c1 1.2 2.2 1.8 3.5 1.8s2.5-.6 3.5-1.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                              </svg>
+                            </button>
+                            <button
+                              className={styles.actionBtn}
+                              title={t("replyingTo")}
+                              onClick={() => setReplyingTo(msg)}
+                            >
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+                                <path d="M10 9V5l-7 7 7 7v-4c5 0 8 1.5 10 5 0-7-3-11-10-11z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none" />
+                              </svg>
+                            </button>
+                          </div>
+
+                          {showReactionPicker === msg.id && (
+                            <div className={styles.reactionPicker}>
+                              {EMOJI_REACTIONS.map((emoji) => (
+                                <button
+                                  key={emoji}
+                                  onClick={() => addReaction(msg.id, emoji)}
+                                  className={styles.reactionOption}
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
                         {msg.reactions.length > 0 && (
                           <div className={styles.reactions}>
                             {msg.reactions.map((r) => (
@@ -480,48 +636,10 @@ export default function ChatPage() {
                             ))}
                           </div>
                         )}
-                        <div className={styles.messageTime}>
-                          {new Date(msg.createdAt).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </div>
                       </div>
-                      <button
-                        className={styles.reactionButton}
-                        title="React"
-                        onClick={() =>
-                          setShowReactionPicker(
-                            showReactionPicker === msg.id ? null : msg.id,
-                          )
-                        }
-                      >
-                        😊
-                      </button>
-                      <button
-                        className={styles.reactionButton}
-                        title={t("replyingTo")}
-                        onClick={() => setReplyingTo(msg)}
-                      >
-                        ↩
-                      </button>
                     </div>
-
-                    {showReactionPicker === msg.id && (
-                      <div className={styles.reactionPicker}>
-                        {EMOJI_REACTIONS.map((emoji) => (
-                          <button
-                            key={emoji}
-                            onClick={() => addReaction(msg.id, emoji)}
-                            className={styles.reactionOption}
-                          >
-                            {emoji}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 
@@ -567,8 +685,17 @@ export default function ChatPage() {
                 className={styles.attachButton}
                 title={t("attachFile")}
                 onClick={() => fileInputRef.current?.click()}
+                aria-label={t("attachFile")}
               >
-                📎
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <path
+                    d="M21 11.5l-8.5 8.5a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.6 1.6 0 0 1-2.3-2.3l7.8-7.8"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
               </button>
               <textarea
                 value={messageContent}
@@ -587,8 +714,18 @@ export default function ChatPage() {
                 onClick={sendMessage}
                 className={styles.sendButton}
                 disabled={sending || (!messageContent.trim() && pendingFiles.length === 0)}
+                aria-label={t("send")}
               >
-                {t("send")}
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <path
+                    d="M4 12l16-8-6 16-3-7-7-1z"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinejoin="round"
+                    fill="currentColor"
+                  />
+                </svg>
+                <span className={styles.sendLabel}>{t("send")}</span>
               </button>
             </div>
           </>
@@ -598,6 +735,14 @@ export default function ChatPage() {
             <h2>{t("startConversation")}</h2>
             <p>{t("startConversationHint")}</p>
             <button className={styles.primaryButton} onClick={openNewModal}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path
+                  d="M12 5v14M5 12h14"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                />
+              </svg>
               {t("newMessage")}
             </button>
           </div>
