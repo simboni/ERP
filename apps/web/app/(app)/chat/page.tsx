@@ -56,10 +56,10 @@ export default function ChatPage() {
     const loadConversations = async () => {
       try {
         setLoading(true);
-        const res = await api.get("/chat/conversations?limit=50");
-        setConversations(res.data || []);
-        if (res.data?.length > 0 && !selectedConversationId) {
-          setSelectedConversationId(res.data[0].id);
+        const res = await api<Conversation[]>("/chat/conversations?limit=50");
+        setConversations(res || []);
+        if (res?.length > 0 && !selectedConversationId) {
+          setSelectedConversationId(res[0].id);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load conversations");
@@ -79,8 +79,8 @@ export default function ChatPage() {
 
     const loadMessages = async () => {
       try {
-        const res = await api.get(`/chat/messages?conversationId=${selectedConversationId}&limit=50`);
-        setMessages((res.data || []).reverse());
+        const res = await api<Message[]>(`/chat/messages?conversationId=${selectedConversationId}&limit=50`);
+        setMessages((res || []).reverse());
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load messages");
       }
@@ -95,8 +95,8 @@ export default function ChatPage() {
   useEffect(() => {
     const loadOnlineUsers = async () => {
       try {
-        const res = await api.get("/chat/presence/online");
-        setOnlineUsers(res.data || []);
+        const res = await api<OnlineUser[]>("/chat/presence/online");
+        setOnlineUsers(res || []);
       } catch (err) {
         // Silently fail for online users
       }
@@ -111,7 +111,7 @@ export default function ChatPage() {
   useEffect(() => {
     const updatePresence = async () => {
       try {
-        await api.post("/chat/presence/update", { isOnline: true });
+        await api("/chat/presence/update", { method: "POST", body: { isOnline: true } });
       } catch (err) {
         // Silently fail
       }
@@ -123,7 +123,7 @@ export default function ChatPage() {
 
     // Cleanup: set offline on unmount
     return () => {
-      api.post("/chat/presence/update", { isOnline: false }).catch(() => {});
+      api("/chat/presence/update", { method: "POST", body: { isOnline: false } }).catch(() => {});
     };
   }, []);
 
@@ -138,12 +138,15 @@ export default function ChatPage() {
     if (!messageContent.trim() || !selectedConversationId) return;
 
     try {
-      const res = await api.post("/chat/messages", {
-        conversationId: selectedConversationId,
-        content: messageContent,
-        replyToId: replyingTo?.id || undefined,
+      const res = await api<Message>("/chat/messages", {
+        method: "POST",
+        body: {
+          conversationId: selectedConversationId,
+          content: messageContent,
+          replyToId: replyingTo?.id || undefined,
+        },
       });
-      setMessages([...messages, res.data]);
+      setMessages([...messages, res]);
       setMessageContent("");
       setReplyingTo(null);
     } catch (err) {
@@ -153,10 +156,10 @@ export default function ChatPage() {
 
   const addReaction = async (messageId: string, emoji: string) => {
     try {
-      await api.post(`/chat/messages/${messageId}/reactions`, { emoji });
+      await api(`/chat/messages/${messageId}/reactions`, { method: "POST", body: { emoji } });
       // Refresh messages to show new reaction
-      const res = await api.get(`/chat/messages?conversationId=${selectedConversationId}&limit=50`);
-      setMessages((res.data || []).reverse());
+      const res = await api<Message[]>(`/chat/messages?conversationId=${selectedConversationId}&limit=50`);
+      setMessages((res || []).reverse());
       setShowReactionPicker(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add reaction");
@@ -165,10 +168,10 @@ export default function ChatPage() {
 
   const removeReaction = async (messageId: string, emoji: string) => {
     try {
-      await api.delete(`/chat/messages/${messageId}/reactions/${emoji}`);
+      await api(`/chat/messages/${messageId}/reactions/${emoji}`, { method: "DELETE" });
       // Refresh messages to show updated reactions
-      const res = await api.get(`/chat/messages?conversationId=${selectedConversationId}&limit=50`);
-      setMessages((res.data || []).reverse());
+      const res = await api<Message[]>(`/chat/messages?conversationId=${selectedConversationId}&limit=50`);
+      setMessages((res || []).reverse());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to remove reaction");
     }
