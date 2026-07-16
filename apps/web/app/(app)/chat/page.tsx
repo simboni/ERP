@@ -609,11 +609,11 @@ export default function ChatPage() {
                                 )
                               }
                             >
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-                                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
-                                <circle cx="9" cy="10" r="1.2" fill="currentColor" />
-                                <circle cx="15" cy="10" r="1.2" fill="currentColor" />
-                                <path d="M8.5 14.5c1 1.2 2.2 1.8 3.5 1.8s2.5-.6 3.5-1.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden>
+                                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
+                                <circle cx="9" cy="10" r="1.3" fill="currentColor" />
+                                <circle cx="15" cy="10" r="1.3" fill="currentColor" />
+                                <path d="M8.3 14.3c1 1.3 2.3 2 3.7 2s2.7-.7 3.7-2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                               </svg>
                             </button>
                             <button
@@ -621,8 +621,8 @@ export default function ChatPage() {
                               title={t("replyingTo")}
                               onClick={() => setReplyingTo(msg)}
                             >
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-                                <path d="M10 9V5l-7 7 7 7v-4c5 0 8 1.5 10 5 0-7-3-11-10-11z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none" />
+                              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden>
+                                <path d="M9 10V6l-6 6 6 6v-4c4.5 0 7.5 1.4 9.5 4.5C18.5 15 16 11 9 11z" fill="currentColor" />
                               </svg>
                             </button>
                           </div>

@@ -421,12 +421,12 @@
   opacity: 1;
 }
 .actionBtn {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   border: 1px solid var(--line);
   background: var(--card);
-  color: var(--muted);
+  color: var(--ink-2);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -434,11 +434,20 @@
   box-shadow: var(--shadow-1);
   transition:
     color 0.12s ease,
-    background 0.12s ease;
+    background 0.12s ease,
+    border-color 0.12s ease;
 }
 .actionBtn:hover {
   color: var(--brand);
-  background: var(--card-2);
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+/* SVG flex items can collapse to 0 width in some engines — pin the size. */
+.actionBtn svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  display: block;
 }
 
 /* ---------- Reaction picker ---------- */
@@ -873,6 +882,12 @@
 /* Back button: hidden on desktop (two panes always visible). */
 .backBtn {
   display: none;
+}
+.backBtn svg {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  display: block;
 }
 
 /* ---------- Responsive: single-pane list <-> thread ---------- */

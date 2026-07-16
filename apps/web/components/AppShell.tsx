@@ -462,6 +462,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
           <span className="topbar-tenant">{tenantName}</span>
           <span className="topbar-spacer" />
+          <div className="topbar-tools">
           <button
             type="button"
             className="topbar-search"
@@ -493,21 +494,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 setBellOpen((v) => !v);
               }}
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
-                <path
-                  d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M13.7 21a2 2 0 0 1-3.4 0"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <path d="M12 2.2a1.1 1.1 0 0 1 1.1 1.1v.7a6.2 6.2 0 0 1 5.1 6.1v2.4l1.4 2.8a1 1 0 0 1-.9 1.4H5.3a1 1 0 0 1-.9-1.4l1.4-2.8v-2.4a6.2 6.2 0 0 1 5.1-6.1v-.7A1.1 1.1 0 0 1 12 2.2z" />
+                <path d="M9.4 19.2h5.2a2.6 2.6 0 0 1-5.2 0z" />
               </svg>
               {alerts && alerts.total > 0 && (
                 <span className="bell-badge">
@@ -554,6 +543,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             )}
           </span>
+          </div>
           <span className="topbar-account">
             <button
               type="button"

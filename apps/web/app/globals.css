@@ -459,6 +459,11 @@ body.chat-fullbleed .shell-main { height: 100vh; height: 100dvh; }
 }
 button.avatar { margin: 0; padding: 0; border: 0; }
 button.avatar:hover { background: var(--brand-strong); }
+/* On desktop the tools (search, add, bell) sit inline in the top bar;
+   `display: contents` makes the wrapper transparent to the flex layout.
+   On mobile it becomes a real second-row container (see the 760px query). */
+.topbar-tools { display: contents; }
+
 /* Notification centre (bell) */
 .topbar-bell { position: relative; display: inline-flex; }
 .bell-btn {
@@ -476,6 +481,7 @@ button.avatar:hover { background: var(--brand-strong); }
   transition: background 0.12s ease, color 0.12s ease;
 }
 .bell-btn:hover { background: var(--card-2); color: var(--ink); }
+.bell-btn svg { width: 21px; height: 21px; flex-shrink: 0; display: block; }
 .bell-badge {
   position: absolute;
   top: -3px;
@@ -1301,6 +1307,51 @@ button.avatar:hover { background: var(--brand-strong); }
   .topbar-add-plus svg { width: 15px; height: 15px; }
   .avatar { width: 34px; height: 34px; flex-shrink: 0; }
   .topbar-menu { position: fixed; right: 12px; top: 58px; left: auto; }
+
+  /* Mobile: keep only Menu + tenant + Profile on the top row; drop
+     Search, New invoice and the Bell into a full-width second row so the
+     top row never overcrowds. */
+  .topbar { flex-wrap: wrap; row-gap: 0; }
+  .topbar-tools {
+    display: flex;
+    order: 5;
+    flex-basis: 100%;
+    width: 100%;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line-soft);
+  }
+  /* Search grows to fill the row as a labelled pill again. */
+  .topbar-tools .topbar-search {
+    flex: 1;
+    width: auto;
+    height: 40px;
+    padding: 0 14px;
+    border-radius: 10px;
+    justify-content: flex-start;
+    color: var(--muted);
+  }
+  .topbar-tools .topbar-search-label { display: inline; }
+  /* New invoice returns to a labelled green button. */
+  .topbar-tools .topbar-add {
+    height: 40px;
+    padding: 0 14px;
+    background: var(--brand);
+    color: var(--brand-ink);
+    border-radius: 10px;
+    box-shadow: var(--shadow-1);
+    gap: 6px;
+  }
+  .topbar-tools .topbar-add-label { display: inline; }
+  .topbar-tools .topbar-add-plus {
+    width: auto;
+    height: auto;
+    border-radius: 0;
+    background: transparent;
+  }
+  .topbar-tools .bell-btn { width: 40px; height: 40px; }
 
   /* data tables: scroll inside the card, never the page */
   .table-wrap table { min-width: 560px; }
