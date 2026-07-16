@@ -398,7 +398,11 @@ export default function ChatPage() {
   };
 
   return (
-    <div className={`chat-shell ${styles.container}`}>
+    <div
+      className={`chat-shell ${styles.container} ${
+        selectedConversationId ? styles.threadOpen : ""
+      }`}
+    >
       {/* Sidebar: Conversation list */}
       <div className={styles.sidebar}>
         <div className={styles.sidebarHeader}>
@@ -484,6 +488,21 @@ export default function ChatPage() {
         {selectedConversation ? (
           <>
             <div className={styles.header}>
+              <button
+                className={styles.backBtn}
+                onClick={() => setSelectedConversationId(null)}
+                aria-label="Back"
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <path
+                    d="M15 5l-7 7 7 7"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
               <span
                 className={`${styles.avatar} ${styles.avatarLg} ${styles["c" + colorBucket(selectedConversation.name)]}`}
               >

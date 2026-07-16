@@ -870,31 +870,96 @@
   text-overflow: ellipsis;
 }
 
-/* ---------- Responsive ---------- */
+/* Back button: hidden on desktop (two panes always visible). */
+.backBtn {
+  display: none;
+}
+
+/* ---------- Responsive: single-pane list <-> thread ---------- */
 @media (max-width: 768px) {
   .container {
-    flex-direction: column;
+    position: relative;
+    overflow: hidden;
   }
+  /* The list fills the screen; selecting a conversation swaps to the
+     thread (no reflow, no stacked panes that jump around). */
   .sidebar {
     width: 100%;
-    height: auto;
-    max-height: 42vh;
+    height: 100%;
+    max-height: none;
     border-right: none;
-    border-bottom: 1px solid var(--line);
+  }
+  .main {
+    position: absolute;
+    inset: 0;
+    display: none;
+    background: var(--bg);
+  }
+  .container.threadOpen .sidebar {
+    display: none;
+  }
+  .container.threadOpen .main {
+    display: flex;
+  }
+
+  .backBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    margin-left: -6px;
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .sidebarHeader {
+    padding: 16px 16px 10px;
   }
   .messageList {
-    padding: 16px;
+    padding: 16px 14px;
   }
   .msgCol {
-    max-width: 82%;
+    max-width: 80%;
   }
   .composer {
-    padding: 12px 14px 16px;
+    padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
   }
   .sendLabel {
     display: none;
   }
   .sendButton {
-    padding: 0 14px;
+    width: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+  .header {
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  /* Keep bubbles clean on narrow screens (hover actions don't suit touch). */
+  .msgActions {
+    display: none;
+  }
+
+  /* New-message modal becomes a bottom sheet. */
+  .modalOverlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .modal {
+    max-width: 100%;
+    width: 100%;
+    max-height: 88%;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+  }
+  .error {
+    bottom: 84px;
+    width: max-content;
+    max-width: 90%;
   }
 }

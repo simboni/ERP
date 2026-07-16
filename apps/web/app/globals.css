@@ -406,7 +406,7 @@ body.chat-fullbleed main {
   min-height: 0;
   display: flex;
 }
-body.chat-fullbleed .shell-main { height: 100vh; }
+body.chat-fullbleed .shell-main { height: 100vh; height: 100dvh; }
 .topbar {
   display: flex;
   align-items: center;
