@@ -41,7 +41,8 @@ export class TenantsController {
   async current(@TenantClaims() claims: TenantTokenClaims) {
     return this.db.withTenant(claims.tid, claims.sub, async (client) => {
       const res = await client.query(
-        "SELECT id, name, slug, status, created_at FROM tenants WHERE id = $1",
+        `SELECT id, name, slug, status, created_at, business_type, enabled_modules
+         FROM tenants WHERE id = $1`,
         [claims.tid],
       );
       if (!res.rows[0]) throw new NotFoundException();

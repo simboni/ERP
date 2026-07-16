@@ -17,6 +17,11 @@ import {
   TenantContextGuard,
 } from "../auth/guards";
 import { DbService } from "../db/db.service";
+import {
+  BUSINESS_TYPE_KEYS,
+  isBusinessType,
+  isOptionalModuleKey,
+} from "./industry.constants";
 
 /**
  * The tenant's own configuration surface: legal identity (KRA PIN, VAT
@@ -39,7 +44,7 @@ export class SettingsController {
     postal_address, physical_address, currency,
     fiscal_year_start_month, invoice_footer, invoice_prefix,
     quote_prefix, default_vat_rate, prices_vat_inclusive,
-    default_payment_terms_days`;
+    default_payment_terms_days, business_type, enabled_modules`;
 
   @Get("profile")
   async getProfile(@TenantClaims() claims: TenantTokenClaims) {
@@ -140,6 +145,33 @@ export class SettingsController {
       }
       sets.push(`prices_vat_inclusive = $${i++}`);
       params.push(body.prices_vat_inclusive);
+    }
+
+    // Industry switchboard. businessType is validated against the 8 known
+    // types; enabledModules must be a subset of the 7 optional keys (unknown
+    // keys are rejected). Neither field ever branches app logic — they only
+    // decide which optional modules the tenant sees.
+    if (body.businessType !== undefined) {
+      if (!isBusinessType(body.businessType)) {
+        throw new BadRequestException(
+          `businessType must be one of: ${BUSINESS_TYPE_KEYS.join(", ")}`,
+        );
+      }
+      sets.push(`business_type = $${i++}`);
+      params.push(body.businessType);
+    }
+
+    if (body.enabledModules !== undefined) {
+      const mods = body.enabledModules;
+      if (!Array.isArray(mods) || !mods.every(isOptionalModuleKey)) {
+        throw new BadRequestException(
+          "enabledModules must be an array of known optional module keys",
+        );
+      }
+      // De-duplicate, preserving order.
+      const unique = [...new Set(mods as string[])];
+      sets.push(`enabled_modules = $${i++}`);
+      params.push(unique);
     }
 
     if (sets.length === 0) {

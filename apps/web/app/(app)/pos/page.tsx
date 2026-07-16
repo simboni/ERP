@@ -609,28 +609,28 @@ export default function PosPage() {
                 />
               </div>
             </div>
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                cursor: "pointer",
-                marginTop: 12,
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={newItem.isService}
+            {/*
+              Item type. Stock items track quantity and reorder levels;
+              services sell without stock (a room night, a massage, a labour
+              hour, a meal). The industry architecture reserves further types
+              here — e.g. "Bookable" (appointments/rooms) and "Serialized"
+              (per-unit tracked assets) — but only Stock/Service ship today.
+            */}
+            <div style={{ marginTop: 12, maxWidth: 320 }}>
+              <label>Type</label>
+              <select
+                value={newItem.isService ? "service" : "stock"}
                 onChange={(e) =>
-                  setNewItem({ ...newItem, isService: e.target.checked })
+                  setNewItem({
+                    ...newItem,
+                    isService: e.target.value === "service",
+                  })
                 }
-                style={{ width: "auto", margin: 0 }}
-              />
-              <span>
-                This is a service (no stock) — e.g. a room night, a massage, a
-                labour hour, a meal. Services always sell without needing stock.
-              </span>
-            </label>
+              >
+                <option value="stock">Stock item</option>
+                <option value="service">Service — no stock</option>
+              </select>
+            </div>
             <button
               disabled={!newItem.sku || !newItem.name}
               onClick={() => {

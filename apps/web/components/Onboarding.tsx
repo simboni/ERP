@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { BUSINESS_TYPES, presetModules } from "@/lib/modules";
 
 /**
  * First-run guided setup, rendered as a card sequence at the top of the
@@ -15,6 +16,10 @@ import { useI18n } from "@/lib/i18n";
  */
 
 const HIDE_KEY = "jenga.onbHidden";
+// Marks the "what kind of business" step complete (chosen or skipped). The DB
+// column defaults to 'general', so we can't tell "picked general" from "never
+// asked" — this flag carries that intent across reloads for the session.
+const BIZ_KEY = "jenga.onbBizDone";
 
 interface Counts {
   branches: number;
@@ -37,6 +42,7 @@ export function Onboarding({ invoiceCount }: { invoiceCount: number }) {
   const [dismissed, setDismissed] = useState(true); // hidden until confirmed
   const [counts, setCounts] = useState<Counts | null>(null);
   const [skippedCustomer, setSkippedCustomer] = useState(false);
+  const [bizDone, setBizDone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [demoBusy, setDemoBusy] = useState(false);
   const [error, setError] = useState("");
@@ -68,6 +74,11 @@ export function Onboarding({ invoiceCount }: { invoiceCount: number }) {
       /* private mode: show it */
     }
     setDismissed(hidden);
+    try {
+      setBizDone(sessionStorage.getItem(BIZ_KEY) === "1");
+    } catch {
+      /* private mode: ask again */
+    }
     if (hidden || invoiceCount > 0) return;
     refresh().catch(() => setCounts(null)); // can't derive state → stay hidden
   }, [invoiceCount, refresh]);
@@ -129,6 +140,38 @@ export function Onboarding({ invoiceCount }: { invoiceCount: number }) {
     });
   });
 
+  // Records the choice and advances. Picking a type applies its preset of
+  // optional modules; skipping leaves the workspace on the all-modules default.
+  const markBizDone = (): void => {
+    try {
+      sessionStorage.setItem(BIZ_KEY, "1");
+    } catch {
+      /* in-memory only */
+    }
+    setBizDone(true);
+  };
+
+  const chooseBizType = (key: string): void => {
+    setBusy(true);
+    setError("");
+    const enabledModules = presetModules(key);
+    void api("/tenants/current/profile", {
+      method: "PATCH",
+      body: { businessType: key, enabledModules },
+    })
+      .then(() => {
+        // Keep the sidebar cache in step so modules update without a reload.
+        try {
+          sessionStorage.setItem("jenga.modules", JSON.stringify(enabledModules));
+        } catch {
+          /* in-memory only */
+        }
+        markBizDone();
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "failed"))
+      .finally(() => setBusy(false));
+  };
+
   const loadDemo = (): void => {
     setDemoBusy(true);
     setError("");
@@ -141,6 +184,7 @@ export function Onboarding({ invoiceCount }: { invoiceCount: number }) {
   };
 
   const steps: { title: string; done: boolean }[] = [
+    { title: t("onbStep0"), done: bizDone },
     { title: t("onbStep1"), done: counts.branches > 0 },
     { title: t("onbStep2"), done: counts.customers > 0 || skippedCustomer },
     { title: t("onbStep3"), done: counts.items > 0 },
@@ -192,6 +236,40 @@ export function Onboarding({ invoiceCount }: { invoiceCount: number }) {
               {isCurrent && idx === 0 && (
                 <>
                   <p className="muted" style={{ margin: "2px 0 0" }}>
+                    {t("onbStep0Hint")}
+                  </p>
+                  <div className="onb-biz-chips">
+                    {BUSINESS_TYPES.map((b) => (
+                      <button
+                        key={b.key}
+                        type="button"
+                        className="onb-biz-chip"
+                        disabled={busy}
+                        title={b.blurb}
+                        onClick={() => chooseBizType(b.key)}
+                      >
+                        <span className="onb-biz-emoji">{b.emoji}</span>
+                        {b.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p style={{ margin: "8px 0 0" }}>
+                    <a
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        markBizDone();
+                      }}
+                    >
+                      {t("onbSkip")}
+                    </a>
+                  </p>
+                </>
+              )}
+
+              {isCurrent && idx === 1 && (
+                <>
+                  <p className="muted" style={{ margin: "2px 0 0" }}>
                     {t("onbStep1Hint")}
                   </p>
                   <div className="row" style={{ alignItems: "flex-end" }}>
@@ -215,7 +293,7 @@ export function Onboarding({ invoiceCount }: { invoiceCount: number }) {
                 </>
               )}
 
-              {isCurrent && idx === 1 && (
+              {isCurrent && idx === 2 && (
                 <>
                   <p className="muted" style={{ margin: "2px 0 0" }}>
                     {t("onbStep2Hint")}
@@ -259,7 +337,7 @@ export function Onboarding({ invoiceCount }: { invoiceCount: number }) {
                 </>
               )}
 
-              {isCurrent && idx === 2 && (
+              {isCurrent && idx === 3 && (
                 <>
                   <p className="muted" style={{ margin: "2px 0 0" }}>
                     {t("onbStep3Hint")}
@@ -294,7 +372,7 @@ export function Onboarding({ invoiceCount }: { invoiceCount: number }) {
                 </>
               )}
 
-              {isCurrent && idx === 3 && (
+              {isCurrent && idx === 4 && (
                 <>
                   <p className="muted" style={{ margin: "2px 0 0" }}>
                     {t("onbStep4Hint")}

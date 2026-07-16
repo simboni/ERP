@@ -6,8 +6,13 @@ import { useCallback, useEffect, useState } from "react";
 import { DataTable, Column } from "@/components/DataTable";
 import { useI18n } from "@/lib/i18n";
 import { api, getApiBase, getTenantToken, getUserToken } from "@/lib/api";
+import {
+  BUSINESS_TYPES,
+  OPTIONAL_MODULES,
+  presetModules,
+} from "@/lib/modules";
 
-type Tab = "profile" | "branches" | "tax" | "payments" | "account";
+type Tab = "profile" | "business" | "branches" | "tax" | "payments" | "account";
 
 interface Profile {
   name: string;
@@ -26,8 +31,24 @@ interface Profile {
   default_vat_rate: string;
   prices_vat_inclusive: boolean;
   default_payment_terms_days: number;
+  business_type: string;
+  enabled_modules: string[];
   next_invoice_no: number;
   next_quote_no: number;
+}
+
+/** Reads the current member's role from the tenant JWT for read-only gating. */
+function currentRole(): string {
+  try {
+    const tok = getTenantToken();
+    if (!tok) return "";
+    const payload = JSON.parse(atob(tok.split(".")[1] ?? "")) as {
+      rol?: string;
+    };
+    return payload.rol ?? "";
+  } catch {
+    return "";
+  }
 }
 
 interface Branch {
@@ -60,6 +81,7 @@ export default function SettingsPage() {
   const router = useRouter();
   const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("profile");
+  const canEditBusiness = ["owner", "admin"].includes(currentRole());
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -123,6 +145,44 @@ export default function SettingsPage() {
       for (const f of fields) body[f] = profile[f];
       await api("/tenants/current/profile", { method: "PATCH", body });
       return t("setSaved");
+    });
+
+  // Business type + optional-module visibility. Saving refreshes the sidebar
+  // cache and reloads so the nav reflects the new module set immediately.
+  const saveBusiness = act(async () => {
+    if (!profile) return "";
+    const enabledModules = profile.enabled_modules;
+    await api("/tenants/current/profile", {
+      method: "PATCH",
+      body: { businessType: profile.business_type, enabledModules },
+    });
+    try {
+      sessionStorage.setItem("jenga.modules", JSON.stringify(enabledModules));
+    } catch {
+      /* in-memory only */
+    }
+    // Simplest reliable path: reload so AppShell re-reads the module set.
+    window.location.reload();
+    return t("setSaved");
+  });
+
+  // Picking a type re-suggests that preset's modules (does not wipe manual
+  // tweaks elsewhere — it just sets enabled_modules to the preset).
+  const pickBusinessType = (key: string): void =>
+    setProfile((p) =>
+      p ? { ...p, business_type: key, enabled_modules: presetModules(key) } : p,
+    );
+
+  const toggleModule = (key: string): void =>
+    setProfile((p) => {
+      if (!p) return p;
+      const on = p.enabled_modules.includes(key);
+      return {
+        ...p,
+        enabled_modules: on
+          ? p.enabled_modules.filter((m) => m !== key)
+          : [...p.enabled_modules, key],
+      };
     });
 
   const addBranch = act(async () => {
@@ -261,6 +321,7 @@ export default function SettingsPage() {
         {(
           [
             ["profile", t("setTabProfile")],
+            ["business", t("setTabBusiness")],
             ["branches", t("setTabBranches")],
             ["tax", t("setTabTax")],
             ["payments", t("setTabPayments")],
@@ -368,6 +429,65 @@ export default function SettingsPage() {
           >
             {t("setSave")}
           </button>
+        </div>
+      )}
+
+      {tab === "business" && profile && (
+        <div className="card">
+          <p className="muted">{t("setBusinessIntro")}</p>
+
+          <label>{t("setBusinessType")}</label>
+          <div className="onb-biz-chips" style={{ marginBottom: 4 }}>
+            {BUSINESS_TYPES.map((b) => (
+              <button
+                key={b.key}
+                type="button"
+                className={`onb-biz-chip${profile.business_type === b.key ? " active" : ""}`}
+                disabled={!canEditBusiness || busy}
+                title={b.blurb}
+                onClick={() => pickBusinessType(b.key)}
+              >
+                <span className="onb-biz-emoji">{b.emoji}</span>
+                {b.label}
+              </button>
+            ))}
+          </div>
+          <p className="muted">{t("setBusinessTuneNote")}</p>
+
+          <h3 style={{ margin: "18px 0 2px" }}>{t("setBusinessModules")}</h3>
+          <p className="muted" style={{ marginTop: 0 }}>
+            {t("setBusinessModulesHint")}
+          </p>
+          <div className="mod-matrix">
+            {OPTIONAL_MODULES.map((m) => (
+              <label key={m.key} className="mod-row">
+                <input
+                  type="checkbox"
+                  checked={profile.enabled_modules.includes(m.key)}
+                  disabled={!canEditBusiness || busy}
+                  onChange={() => toggleModule(m.key)}
+                  style={{ width: "auto", margin: 0 }}
+                />
+                <span>
+                  <strong>{m.label}</strong>
+                  <br />
+                  <span className="muted">{m.description}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+
+          {canEditBusiness ? (
+            <button
+              disabled={busy}
+              style={{ marginTop: 16 }}
+              onClick={() => void saveBusiness()}
+            >
+              {t("setSave")}
+            </button>
+          ) : (
+            <p className="muted">{t("setBusinessReadOnly")}</p>
+          )}
         </div>
       )}
 

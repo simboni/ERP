@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { api, clearTokens, getTenantToken } from "@/lib/api";
 import { CommandPalette } from "@/components/CommandPalette";
 import { LangToggle, useI18n, type TKey } from "@/lib/i18n";
+import { OPTIONAL_MODULE_KEYS, type OptionalModuleKey } from "@/lib/modules";
 
 /* Minimal 16px stroke icon set (inline, no dependencies). */
 const stroke = {
@@ -152,6 +153,10 @@ interface NavItem {
   href: string;
   labelKey: TKey;
   icon: keyof typeof Icons;
+  // Optional (toggleable) modules carry their key; core items omit it and
+  // always render. Visibility is decided purely by the tenant's
+  // enabled_modules set — never by business_type.
+  moduleKey?: OptionalModuleKey;
 }
 interface NavSection {
   titleKey: TKey | null;
@@ -166,12 +171,12 @@ const NAV: NavSection[] = [
   {
     titleKey: "navSales",
     items: [
-      { href: "/pos", labelKey: "navPos", icon: "till" },
-      { href: "/quotes", labelKey: "navQuotes", icon: "quote" },
+      { href: "/pos", labelKey: "navPos", icon: "till", moduleKey: "pos" },
+      { href: "/quotes", labelKey: "navQuotes", icon: "quote", moduleKey: "quotes" },
       { href: "/invoices", labelKey: "invoices", icon: "invoice" },
       { href: "/payments", labelKey: "payments", icon: "payment" },
       { href: "/customers", labelKey: "navCustomers", icon: "people" },
-      { href: "/crm", labelKey: "navCrm", icon: "funnel" },
+      { href: "/crm", labelKey: "navCrm", icon: "funnel", moduleKey: "crm" },
     ],
   },
   {
@@ -180,8 +185,8 @@ const NAV: NavSection[] = [
       { href: "/purchases", labelKey: "navPurchasing", icon: "cart" },
       { href: "/suppliers", labelKey: "navSuppliers", icon: "truck" },
       { href: "/inventory", labelKey: "navInventory", icon: "box" },
-      { href: "/projects", labelKey: "navProjects", icon: "briefcase" },
-      { href: "/documents", labelKey: "navDocuments", icon: "folder" },
+      { href: "/projects", labelKey: "navProjects", icon: "briefcase", moduleKey: "projects" },
+      { href: "/documents", labelKey: "navDocuments", icon: "folder", moduleKey: "documents" },
     ],
   },
   {
@@ -194,10 +199,10 @@ const NAV: NavSection[] = [
   {
     titleKey: "navCompliance",
     items: [
-      { href: "/finance", labelKey: "navFinance", icon: "coins" },
+      { href: "/finance", labelKey: "navFinance", icon: "coins", moduleKey: "finance" },
       { href: "/reports", labelKey: "navReports", icon: "chart" },
       { href: "/vat", labelKey: "vat", icon: "shield" },
-      { href: "/controls", labelKey: "navControls", icon: "scale" },
+      { href: "/controls", labelKey: "navControls", icon: "scale", moduleKey: "controls" },
     ],
   },
   {
@@ -217,6 +222,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Starts empty on server AND first client render (hydration must match
   // the exported HTML); the stored name is applied in an effect below.
   const [tenantName, setTenantName] = useState<string>("");
+  // null = not yet loaded → show ALL optional modules so nothing flickers
+  // away before /tenants/current resolves. Once loaded it holds the tenant's
+  // enabled_modules set. The single source of truth is enabled_modules; the
+  // shell never inspects business_type.
+  const [modules, setModules] = useState<string[] | null>(null);
   const [open, setOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -238,13 +248,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       return;
     }
     const stored = sessionStorage.getItem("jenga.tenantName");
-    if (stored) {
-      setTenantName(stored);
-    } else {
-      api<{ name: string }>("/tenants/current")
+    const storedModules = sessionStorage.getItem("jenga.modules");
+    if (stored) setTenantName(stored);
+    if (storedModules) {
+      try {
+        setModules(JSON.parse(storedModules) as string[]);
+      } catch {
+        /* corrupt cache → refetch below */
+      }
+    }
+    // Fetch when either piece is missing (name and module list are cached
+    // together off the same /tenants/current call).
+    if (!stored || !storedModules) {
+      api<{ name: string; enabled_modules: string[] }>("/tenants/current")
         .then((tn) => {
           sessionStorage.setItem("jenga.tenantName", tn.name);
           setTenantName(tn.name);
+          const mods = tn.enabled_modules ?? [];
+          sessionStorage.setItem("jenga.modules", JSON.stringify(mods));
+          setModules(mods);
         })
         .catch(() => undefined);
     }
@@ -265,6 +287,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const signOut = (): void => {
     sessionStorage.removeItem("jenga.tenantName");
+    sessionStorage.removeItem("jenga.modules");
     clearTokens();
     router.replace("/");
   };
@@ -285,12 +308,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </Link>
         </div>
         <nav>
-          {NAV.map((section, si) => (
+          {NAV.map((section, si) => {
+            // Core items (no moduleKey) always show. Optional items show only
+            // when enabled. Until the module set loads (modules === null) show
+            // everything so nothing flickers away on first paint.
+            const visible = section.items.filter(
+              (item) =>
+                !item.moduleKey ||
+                modules === null ||
+                modules.includes(item.moduleKey),
+            );
+            if (visible.length === 0) return null; // empty section → no title
+            return (
             <div key={si} className="nav-section">
               {section.titleKey && (
                 <div className="nav-title">{t(section.titleKey)}</div>
               )}
-              {section.items.map((item) => {
+              {visible.map((item) => {
                 const active =
                   pathname === item.href ||
                   pathname.startsWith(`${item.href}/`);
@@ -306,7 +340,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 );
               })}
             </div>
-          ))}
+            );
+          })}
         </nav>
         <div className="sidebar-foot">
           <LangToggle />

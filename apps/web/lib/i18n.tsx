@@ -64,9 +64,12 @@ const DICT = {
     confirmYes: "Yes",
     confirmNo: "No",
     onbTitle: "Set up your business",
-    onbIntro: "Four quick steps and you're ready to trade.",
+    onbIntro: "A few quick steps and you're ready to trade.",
     onbHide: "I know my way around — hide this",
     onbDone: "Done",
+    onbStep0: "What kind of business is this?",
+    onbStep0Hint:
+      "Pick the closest match — we'll switch on the tools that fit. You can fine-tune anytime in Settings.",
     onbStep1: "Name your first branch",
     onbStep1Hint:
       "Your main shop or office. We'll also set up a standard chart of accounts for you.",
@@ -93,10 +96,20 @@ const DICT = {
     setSaved: "Saved.",
     setSave: "Save changes",
     setTabProfile: "Business profile",
+    setTabBusiness: "Business & modules",
     setTabBranches: "Branches",
     setTabTax: "Tax & numbering",
     setTabPayments: "Payment channels",
     setTabAccount: "Account & security",
+    setBusinessIntro:
+      "Your business type switches on the modules that fit. Every module is optional — fine-tune the list below anytime.",
+    setBusinessType: "Business type",
+    setBusinessTuneNote:
+      "Changing the type suggests a fresh set of modules — you can fine-tune below.",
+    setBusinessModules: "Optional modules",
+    setBusinessModulesHint:
+      "Turn modules on or off. Core tools (invoices, payments, customers, inventory, HR, reports) are always available.",
+    setBusinessReadOnly: "Only an owner or admin can change modules.",
     setProfileIntro:
       "Your business identity. These details print on invoices, quotes and receipts.",
     setDisplayName: "Display name",
@@ -344,9 +357,12 @@ const DICT = {
     confirmYes: "Ndiyo",
     confirmNo: "Hapana",
     onbTitle: "Sanidi biashara yako",
-    onbIntro: "Hatua nne fupi na uko tayari kufanya biashara.",
+    onbIntro: "Hatua chache fupi na uko tayari kufanya biashara.",
     onbHide: "Naijua vizuri — ficha hii",
     onbDone: "Imekamilika",
+    onbStep0: "Hii ni biashara ya aina gani?",
+    onbStep0Hint:
+      "Chagua inayolingana zaidi — tutawasha zana zinazofaa. Unaweza kurekebisha wakati wowote kwenye Mipangilio.",
     onbStep1: "Taja tawi lako la kwanza",
     onbStep1Hint:
       "Duka au ofisi yako kuu. Tutakuandalia pia orodha ya kawaida ya akaunti.",
@@ -373,10 +389,20 @@ const DICT = {
     setSaved: "Imehifadhiwa.",
     setSave: "Hifadhi mabadiliko",
     setTabProfile: "Wasifu wa biashara",
+    setTabBusiness: "Biashara na moduli",
     setTabBranches: "Matawi",
     setTabTax: "Kodi na nambari",
     setTabPayments: "Njia za malipo",
     setTabAccount: "Akaunti na usalama",
+    setBusinessIntro:
+      "Aina ya biashara yako huwasha moduli zinazofaa. Kila moduli si lazima — rekebisha orodha hapa chini wakati wowote.",
+    setBusinessType: "Aina ya biashara",
+    setBusinessTuneNote:
+      "Kubadilisha aina hupendekeza seti mpya ya moduli — unaweza kurekebisha hapa chini.",
+    setBusinessModules: "Moduli za hiari",
+    setBusinessModulesHint:
+      "Washa au zima moduli. Zana za msingi (ankara, malipo, wateja, hesabu, HR, ripoti) zipo daima.",
+    setBusinessReadOnly: "Ni mmiliki au msimamizi pekee anayeweza kubadilisha moduli.",
     setProfileIntro:
       "Utambulisho wa biashara yako. Maelezo haya huchapishwa kwenye ankara, nukuu na risiti.",
     setDisplayName: "Jina la kuonyesha",

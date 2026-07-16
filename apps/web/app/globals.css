@@ -741,6 +741,41 @@ button.avatar:hover { background: var(--brand-strong); }
 }
 .onb-path .onb-path-icon { font-size: 1.4rem; line-height: 1; }
 
+/* ---- business-type chips (onboarding + settings) ---- */
+.onb-biz-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.onb-biz-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+  font-size: 0.9rem;
+  cursor: pointer;
+  margin: 0;
+  width: auto;
+}
+.onb-biz-chip:hover { border-color: var(--brand); }
+.onb-biz-chip.active { border-color: var(--brand); background: var(--brand); color: #fff; }
+.onb-biz-chip:disabled { opacity: 0.55; cursor: default; }
+.onb-biz-chip .onb-biz-emoji { font-size: 1.1rem; line-height: 1; }
+
+/* ---- optional-module toggle matrix (settings) ---- */
+.mod-matrix { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 8px; }
+@media (max-width: 760px) { .mod-matrix { grid-template-columns: 1fr; } }
+.mod-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.mod-row strong { font-weight: 600; }
+
 /* ---- empty states ---- */
 .empty {
   text-align: center;
