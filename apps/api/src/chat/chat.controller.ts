@@ -7,40 +7,39 @@ import {
   Param,
   Query,
   UseGuards,
-  Req,
 } from "@nestjs/common";
-import { AuthGuard } from "@nestjs/passport";
+import {
+  JwtAuthGuard,
+  TenantContextGuard,
+  TenantClaims,
+} from "../auth/guards";
 import { ChatService } from "./chat.service";
 import type { TenantTokenClaims } from "@jenga/shared";
 import type { Message, Conversation } from "./chat.service";
 
-interface AuthRequest {
-  user: TenantTokenClaims;
-}
-
 @Controller("chat")
-@UseGuards(AuthGuard("jwt"))
+@UseGuards(JwtAuthGuard, TenantContextGuard)
 export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 
   @Get("conversations")
   async listConversations(
-    @Req() req: AuthRequest,
+    @TenantClaims() claims: TenantTokenClaims,
     @Query("limit") limit?: string,
   ): Promise<Conversation[]> {
     return this.chatService.listConversations(
-      req.user,
+      claims,
       limit ? parseInt(limit, 10) : 50,
     );
   }
 
   @Post("conversations/direct")
   async startDirectConversation(
-    @Req() req: AuthRequest,
+    @TenantClaims() claims: TenantTokenClaims,
     @Body("otherUserId") otherUserId: string,
   ): Promise<{ conversationId: string }> {
     const conversationId = await this.chatService.getOrCreateDirectConversation(
-      req.user,
+      claims,
       otherUserId,
     );
     return { conversationId };
@@ -48,31 +47,31 @@ export class ChatController {
 
   @Post("conversations/department")
   async getDepartmentConversation(
-    @Req() req: AuthRequest,
+    @TenantClaims() claims: TenantTokenClaims,
     @Body("departmentId") departmentId: string,
   ): Promise<{ conversationId: string }> {
     const conversationId = await this.chatService.getDepartmentConversation(
-      req.user,
+      claims,
       departmentId,
     );
     return { conversationId };
   }
 
   @Get("conversations/org-broadcast")
-  async getOrgBroadcast(@Req() req: AuthRequest): Promise<{ conversationId: string }> {
-    const conversationId = await this.chatService.getOrgBroadcastConversation(req.user);
+  async getOrgBroadcast(@TenantClaims() claims: TenantTokenClaims): Promise<{ conversationId: string }> {
+    const conversationId = await this.chatService.getOrgBroadcastConversation(claims);
     return { conversationId };
   }
 
   @Get("messages")
   async getMessages(
-    @Req() req: AuthRequest,
+    @TenantClaims() claims: TenantTokenClaims,
     @Query("conversationId") conversationId: string,
     @Query("limit") limit?: string,
     @Query("offset") offset?: string,
   ): Promise<Message[]> {
     return this.chatService.getMessages(
-      req.user,
+      claims,
       conversationId,
       limit ? parseInt(limit, 10) : 50,
       offset ? parseInt(offset, 10) : 0,
@@ -81,44 +80,44 @@ export class ChatController {
 
   @Post("messages")
   async sendMessage(
-    @Req() req: AuthRequest,
+    @TenantClaims() claims: TenantTokenClaims,
     @Body("conversationId") conversationId: string,
     @Body("content") content: string,
     @Body("replyToId") replyToId?: string,
   ): Promise<Message> {
-    return this.chatService.sendMessage(req.user, conversationId, content, replyToId);
+    return this.chatService.sendMessage(claims, conversationId, content, replyToId);
   }
 
   @Post("messages/:messageId/reactions")
   async addReaction(
-    @Req() req: AuthRequest,
+    @TenantClaims() claims: TenantTokenClaims,
     @Param("messageId") messageId: string,
     @Body("emoji") emoji: string,
   ): Promise<void> {
-    return this.chatService.addReaction(req.user, messageId, emoji);
+    return this.chatService.addReaction(claims, messageId, emoji);
   }
 
   @Delete("messages/:messageId/reactions/:emoji")
   async removeReaction(
-    @Req() req: AuthRequest,
+    @TenantClaims() claims: TenantTokenClaims,
     @Param("messageId") messageId: string,
     @Param("emoji") emoji: string,
   ): Promise<void> {
-    return this.chatService.removeReaction(req.user, messageId, emoji);
+    return this.chatService.removeReaction(claims, messageId, emoji);
   }
 
   @Post("presence/update")
   async updatePresence(
-    @Req() req: AuthRequest,
+    @TenantClaims() claims: TenantTokenClaims,
     @Body("isOnline") isOnline: boolean,
   ): Promise<void> {
-    return this.chatService.updatePresence(req.user, isOnline);
+    return this.chatService.updatePresence(claims, isOnline);
   }
 
   @Get("presence/online")
   async getOnlineUsers(
-    @Req() req: AuthRequest,
+    @TenantClaims() claims: TenantTokenClaims,
   ): Promise<Array<{ id: string; name: string; lastSeen: string }>> {
-    return this.chatService.getOnlineUsers(req.user);
+    return this.chatService.getOnlineUsers(claims);
   }
 }
