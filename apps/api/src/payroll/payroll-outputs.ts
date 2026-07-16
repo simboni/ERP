@@ -42,27 +42,29 @@ export function renderPayslipPdf(data: PayslipData): Promise<Buffer> {
     if (data.kraPin) doc.fontSize(9).fillColor("#555").text(`KRA PIN: ${data.kraPin}`);
     doc.moveDown();
 
-    const row = (label: string, cents: number, bold = false): void => {
-      doc
-        .fontSize(bold ? 11 : 10)
-        .fillColor("#000")
-        .text(label, 36, doc.y, { continued: true })
-        .text(`KES ${kes(cents)}`, { align: "right" });
-      doc.moveDown(0.2);
-    };
-    row("Gross pay", data.grossCents, true);
+    // Header for amounts
+    doc.fontSize(8).fillColor("#666").text("Amount [KES]", 200, doc.y - 10, { align: "right" });
     doc.moveDown(0.3);
-    doc.fontSize(9).fillColor("#555").text("Deductions");
+
+    const row = (label: string, cents: number, bold = false): void => {
+      const y = doc.y;
+      const labelWidth = 160;
+      doc.fontSize(bold ? 11 : 10).fillColor("#000").text(label, 36, y, { width: labelWidth });
+      doc.fontSize(bold ? 11 : 10).text(kes(Math.abs(cents)), 200, y, { align: "right" });
+      if (cents < 0) doc.fontSize(bold ? 11 : 10).text("-", 195, y, { align: "right" });
+      doc.moveDown(0.25);
+    };
+
+    row("Gross pay", data.grossCents, true);
+    doc.moveDown(0.2);
+    doc.fontSize(9).fillColor("#555").text("Deductions:");
     row("NSSF (pension)", -data.nssfEmpCents);
     row("SHIF (health)", -data.shifCents);
     row("Affordable Housing Levy", -data.ahlEmpCents);
     row("PAYE (income tax)", -data.payeCents);
-    doc.moveDown(0.3);
-    doc
-      .moveTo(36, doc.y)
-      .lineTo(doc.page.width - 36, doc.y)
-      .strokeColor("#999")
-      .stroke();
+
+    doc.moveDown(0.2);
+    doc.moveTo(36, doc.y).lineTo(doc.page.width - 36, doc.y).strokeColor("#999").stroke();
     doc.moveDown(0.3);
     row("NET PAY", data.netCents, true);
 

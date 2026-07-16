@@ -79,19 +79,19 @@ export function renderInvoicePdf(data: InvoicePdfData): Promise<Buffer> {
 
     // Table header with background
     const xDesc = 48;
-    const xQty = 300;
-    const xPrice = 365;
-    const xVat = 440;
-    const xTotal = 485;
+    const xQty = 285;
+    const xPrice = 345;
+    const xVat = 420;
+    const xTotal = 480;
     const tableTop = doc.y;
 
     doc.rect(xDesc - 5, tableTop, 502, 20).fillAndStroke("#f5f5f5", "#ddd");
     doc.fillColor("#333").fontSize(9).font("Helvetica-Bold");
     doc.text("Description", xDesc, tableTop + 5);
-    doc.text("Qty", xQty, tableTop + 5);
-    doc.text("Unit Price", xPrice, tableTop + 5);
-    doc.text("VAT", xVat, tableTop + 5);
-    doc.text("Total", xTotal, tableTop + 5);
+    doc.text("Qty", xQty, tableTop + 5, { align: "center" });
+    doc.text("Unit Price [KES]", xPrice, tableTop + 5, { align: "right" });
+    doc.text("VAT %", xVat, tableTop + 5, { align: "center" });
+    doc.text("Total [KES]", xTotal, tableTop + 5, { align: "right" });
     doc.moveDown(1.2);
 
     // Table rows
@@ -99,8 +99,8 @@ export function renderInvoicePdf(data: InvoicePdfData): Promise<Buffer> {
     for (let i = 0; i < data.lines.length; i++) {
       const line = data.lines[i];
       const y = doc.y;
-      const descHeight = doc.heightOfString(line.description, { width: 240 });
-      const rowHeight = Math.max(descHeight + 8, 18);
+      const descHeight = doc.heightOfString(line.description, { width: 220 });
+      const rowHeight = Math.max(descHeight + 6, 16);
 
       // Alternate row background
       if (i % 2 === 0) {
@@ -108,38 +108,42 @@ export function renderInvoicePdf(data: InvoicePdfData): Promise<Buffer> {
       }
 
       doc.fillColor("#000");
-      doc.text(line.description, xDesc, y, { width: 240 });
-      doc.text(String(Number(line.quantity)), xQty, y, { align: "center" });
-      doc.text(kes(line.unit_price_cents), xPrice, y, { align: "right" });
+      doc.text(line.description, xDesc, y, { width: 220 });
+      doc.fontSize(8).text(String(Number(line.quantity)), xQty - 5, y + rowHeight - 11, { align: "center" });
+      doc.fontSize(9).text(kes(line.unit_price_cents), xPrice - 5, y + rowHeight - 11, { align: "right" });
       doc.text(
-        line.vat_rate === "0.16" ? "16%" : line.vat_rate === "0" ? "0%" : "exempt",
-        xVat,
-        y,
+        line.vat_rate === "0.16" ? "16%" : line.vat_rate === "0" ? "0%" : "Exempt",
+        xVat - 5,
+        y + rowHeight - 11,
         { align: "center" },
       );
-      doc.text(kes(line.line_total_cents), xTotal, y, { align: "right" });
-      doc.moveDown(rowHeight / 14);
+      doc.text(kes(line.line_total_cents), xTotal - 5, y + rowHeight - 11, { align: "right" });
+      doc.moveDown(rowHeight / 12);
     }
 
     // Summary section
-    doc.moveDown(0.5);
-    doc.moveTo(350, doc.y).lineTo(547, doc.y).strokeColor("#ddd").stroke();
+    doc.moveDown(0.8);
+    const summaryLabelX = 350;
+    const summaryValueX = 480;
+
+    doc.moveTo(summaryLabelX, doc.y).lineTo(547, doc.y).strokeColor("#ddd").stroke();
     doc.moveDown(0.5);
 
-    const summaryX = 380;
     doc.fontSize(9).fillColor("#666").font("Helvetica");
-    doc.text(`Subtotal:`, summaryX, doc.y, { align: "left", width: 100 });
-    doc.text(kes(data.subtotalCents), summaryX + 100, doc.y - 9, { align: "right" });
+    doc.text("Subtotal:", summaryLabelX, doc.y, { width: 100 });
+    doc.text(kes(data.subtotalCents), summaryValueX, doc.y - 13.5, { align: "right" });
 
-    doc.text(`VAT (16%):`, summaryX, doc.y, { align: "left", width: 100 });
-    doc.text(kes(data.vatCents), summaryX + 100, doc.y - 9, { align: "right" });
+    doc.moveDown(0.5);
+    doc.text("VAT (16%):", summaryLabelX, doc.y, { width: 100 });
+    doc.text(kes(data.vatCents), summaryValueX, doc.y - 13.5, { align: "right" });
 
-    doc.moveTo(350, doc.y + 2).lineTo(547, doc.y + 2).strokeColor("#333").stroke();
+    doc.moveDown(0.5);
+    doc.moveTo(summaryLabelX, doc.y).lineTo(547, doc.y).strokeColor("#333").stroke();
     doc.moveDown(0.5);
 
-    doc.fontSize(12).fillColor("#000").font("Helvetica-Bold");
-    doc.text(`TOTAL:`, summaryX, doc.y, { align: "left", width: 100 });
-    doc.text(kes(data.totalCents), summaryX + 100, doc.y - 11, { align: "right" });
+    doc.fontSize(11).fillColor("#000").font("Helvetica-Bold");
+    doc.text("TOTAL [KES]:", summaryLabelX, doc.y, { width: 100 });
+    doc.text(kes(data.totalCents), summaryValueX, doc.y - 13.5, { align: "right" });
 
     // Fiscal information
     doc.moveDown(1.5);
