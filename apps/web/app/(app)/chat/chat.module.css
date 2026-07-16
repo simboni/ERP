@@ -579,24 +579,24 @@
   align-items: flex-end;
 }
 .attachButton {
-  width: 44px;
+  width: 36px;
   height: 44px;
-  border-radius: 50%;
-  border: 1px solid var(--line);
-  background: var(--card);
+  border: none;
+  background: transparent;
   color: var(--muted);
   cursor: pointer;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition:
-    color 0.12s ease,
-    background 0.12s ease;
+  padding: 0;
+  transition: color 0.12s ease;
 }
 .attachButton:hover {
   color: var(--brand);
-  background: var(--card-2);
+}
+.attachButton:active {
+  transform: scale(0.92);
 }
 .input {
   flex: 1;
@@ -906,14 +906,18 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
-    margin-left: -6px;
-    border: none;
-    background: transparent;
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    background: var(--card-2);
     color: var(--ink);
     cursor: pointer;
     flex-shrink: 0;
+  }
+  .backBtn:active {
+    background: var(--line-soft);
+    transform: scale(0.94);
   }
 
   .sidebarHeader {

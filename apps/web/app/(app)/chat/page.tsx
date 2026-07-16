@@ -491,13 +491,14 @@ export default function ChatPage() {
               <button
                 className={styles.backBtn}
                 onClick={() => setSelectedConversationId(null)}
-                aria-label="Back"
+                aria-label="Back to conversations"
+                title="Back to conversations"
               >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
                   <path
                     d="M15 5l-7 7 7 7"
                     stroke="currentColor"
-                    strokeWidth="2"
+                    strokeWidth="2.4"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
@@ -706,11 +707,11 @@ export default function ChatPage() {
                 onClick={() => fileInputRef.current?.click()}
                 aria-label={t("attachFile")}
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden>
                   <path
                     d="M21 11.5l-8.5 8.5a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.6 1.6 0 0 1-2.3-2.3l7.8-7.8"
                     stroke="currentColor"
-                    strokeWidth="1.8"
+                    strokeWidth="1.9"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
