@@ -1639,8 +1639,13 @@ button.avatar:hover { background: var(--brand-strong); }
 @media (max-width: 640px) {
   .lp-nav-links { display: none; }
   .lp-hide-sm { display: none; }
-  .lp-nav-inner { padding: 10px 16px; gap: 10px; }
+  .lp-nav-inner { padding: 10px 14px; gap: 8px; }
   .lp-nav-links { margin-left: 0; }
+  /* Keep Sign in reachable on phones; compact the action buttons so
+     logo · language · Sign in · Start free all fit the top bar. */
+  .lp-nav-actions { gap: 8px; }
+  .lp-nav-actions .lp-btn { padding: 7px 12px; font-size: 0.85rem; }
+  .lp-nav-signin { padding: 7px 8px; }
   .lp-section { padding: 52px 18px; }
   .lp-section-alt { padding: 52px 0; }
   .lp-hero-grid { padding: 32px 18px 24px; }

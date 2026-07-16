@@ -202,7 +202,7 @@ export default function LandingPage() {
               </Link>
             ) : (
               <>
-                <Link href="/login" className="lp-btn lp-btn-ghost lp-hide-sm">
+                <Link href="/login" className="lp-btn lp-btn-ghost lp-nav-signin">
                   {tr(COPY.signIn)}
                 </Link>
                 <Link href="/login" className="lp-btn lp-btn-primary">
