@@ -7,6 +7,9 @@ import { ComplianceController } from "./compliance/compliance.controller";
 import { ComplianceService } from "./compliance/compliance.service";
 import { ControlsController } from "./controls/controls.controller";
 import { ControlsService } from "./controls/controls.service";
+import { DemoController } from "./demo/demo.controller";
+import { DemoService } from "./demo/demo.service";
+import { DemoPurgeService } from "./demo/demo-purge.service";
 import { ExportController } from "./compliance/export.controller";
 import { loadConfig } from "./config";
 import { DbService } from "./db/db.service";
@@ -71,6 +74,7 @@ import { TenantsController } from "./tenants/tenants.controller";
   ],
   controllers: [
     AuthController,
+    DemoController,
     TenantsController,
     SettingsController,
     DashboardController,
@@ -102,6 +106,8 @@ import { TenantsController } from "./tenants/tenants.controller";
   providers: [
     DbService,
     AuthService,
+    DemoService,
+    DemoPurgeService,
     AuditService,
     RulesService,
     FiscalService,
