@@ -75,50 +75,68 @@ export function renderInvoicePdf(data: InvoicePdfData): Promise<Buffer> {
     doc.text(`Invoice Date: ${data.issueDate ?? "—"}`, detailsX, doc.y);
     doc.text(`Status: ${data.status}`, detailsX, doc.y);
 
-    doc.moveDown(1.2);
+    doc.moveDown(1);
 
     // Table header with background
-    const xDesc = 48;
-    const xQty = 285;
-    const xPrice = 345;
-    const xVat = 420;
-    const xTotal = 480;
+    const colDesc = { x: 48, width: 250 };
+    const colQty = { x: 300, width: 40 };
+    const colPrice = { x: 345, width: 75 };
+    const colVat = { x: 425, width: 40 };
+    const colTotal = { x: 470, width: 75 };
     const tableTop = doc.y;
+    const headerHeight = 18;
 
-    doc.rect(xDesc - 5, tableTop, 502, 20).fillAndStroke("#f5f5f5", "#ddd");
-    doc.fillColor("#333").fontSize(9).font("Helvetica-Bold");
-    doc.text("Description", xDesc, tableTop + 5);
-    doc.text("Qty", xQty, tableTop + 5, { align: "center" });
-    doc.text("Unit Price [KES]", xPrice, tableTop + 5, { align: "right" });
-    doc.text("VAT %", xVat, tableTop + 5, { align: "center" });
-    doc.text("Total [KES]", xTotal, tableTop + 5, { align: "right" });
-    doc.moveDown(1.2);
+    doc.rect(48, tableTop, 499, headerHeight).fillAndStroke("#f5f5f5", "#ddd");
+    doc.fillColor("#333").fontSize(8).font("Helvetica-Bold");
+    doc.text("Description", colDesc.x, tableTop + 5, { width: colDesc.width });
+    doc.text("Qty", colQty.x, tableTop + 5, { width: colQty.width, align: "center" });
+    doc.text("Unit Price [KES]", colPrice.x, tableTop + 5, { width: colPrice.width, align: "right" });
+    doc.text("VAT %", colVat.x, tableTop + 5, { width: colVat.width, align: "center" });
+    doc.text("Total [KES]", colTotal.x, tableTop + 5, { width: colTotal.width, align: "right" });
+    doc.y = tableTop + headerHeight;
 
     // Table rows
-    doc.fillColor("#000").fontSize(9).font("Helvetica");
+    doc.fillColor("#000").fontSize(8).font("Helvetica");
     for (let i = 0; i < data.lines.length; i++) {
       const line = data.lines[i];
       const y = doc.y;
-      const descHeight = doc.heightOfString(line.description, { width: 220 });
-      const rowHeight = Math.max(descHeight + 6, 16);
+      const rowHeight = 18;
 
       // Alternate row background
       if (i % 2 === 0) {
-        doc.rect(xDesc - 5, y - 2, 502, rowHeight).fill("#fafafa");
+        doc.rect(48, y, 499, rowHeight).fill("#fafafa");
       }
 
-      doc.fillColor("#000");
-      doc.text(line.description, xDesc, y, { width: 220 });
-      doc.fontSize(8).text(String(Number(line.quantity)), xQty - 5, y + rowHeight - 11, { align: "center" });
-      doc.fontSize(9).text(kes(line.unit_price_cents), xPrice - 5, y + rowHeight - 11, { align: "right" });
-      doc.text(
-        line.vat_rate === "0.16" ? "16%" : line.vat_rate === "0" ? "0%" : "Exempt",
-        xVat - 5,
-        y + rowHeight - 11,
-        { align: "center" },
-      );
-      doc.text(kes(line.line_total_cents), xTotal - 5, y + rowHeight - 11, { align: "right" });
-      doc.moveDown(rowHeight / 12);
+      // Draw row border
+      doc.moveTo(48, y + rowHeight).lineTo(547, y + rowHeight).strokeColor("#eee").stroke();
+
+      // Row content - align baseline
+      const contentY = y + 4;
+      doc.fillColor("#000").fontSize(8);
+      doc.text(line.description, colDesc.x, contentY, { width: colDesc.width, continued: false });
+
+      doc.fontSize(8).text(String(Number(line.quantity).toFixed(2)), colQty.x, contentY, {
+        width: colQty.width,
+        align: "center"
+      });
+
+      doc.text(kes(line.unit_price_cents), colPrice.x, contentY, {
+        width: colPrice.width,
+        align: "right"
+      });
+
+      const vatDisplay = line.vat_rate === "0.16" ? "16%" : line.vat_rate === "0" ? "0%" : "Exempt";
+      doc.text(vatDisplay, colVat.x, contentY, {
+        width: colVat.width,
+        align: "center"
+      });
+
+      doc.text(kes(line.line_total_cents), colTotal.x, contentY, {
+        width: colTotal.width,
+        align: "right"
+      });
+
+      doc.y = y + rowHeight;
     }
 
     // Summary section
