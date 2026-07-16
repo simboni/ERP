@@ -3,6 +3,7 @@ import { JwtModule } from "@nestjs/jwt";
 import { AuditService } from "./audit/audit.service";
 import { AuthController } from "./auth/auth.controller";
 import { AuthService } from "./auth/auth.service";
+import { ChatModule } from "./chat/chat.module";
 import { ComplianceController } from "./compliance/compliance.controller";
 import { ComplianceService } from "./compliance/compliance.service";
 import { ControlsController } from "./controls/controls.controller";
@@ -71,6 +72,7 @@ import { TenantsController } from "./tenants/tenants.controller";
       secret: loadConfig().jwtSecret,
       signOptions: { expiresIn: loadConfig().accessTokenTtlSec },
     }),
+    ChatModule,
   ],
   controllers: [
     AuthController,

@@ -145,6 +145,11 @@ export const Icons = {
       <path d="M2.5 14a2.7 2.7 0 0 0 5 0L5 8zM16.5 14a2.7 2.7 0 0 0 5 0L19 8z" />
     </svg>
   ),
+  chat: (
+    <svg viewBox="0 0 24 24" {...stroke}>
+      <path d="M21 11.5c0 4.97-4.03 9-9 9H4l3-3c-1.5-1.5-2.5-3.6-2.5-6V6c0-4.97 4.03-9 9-9s9 4.03 9 9z" />
+    </svg>
+  ),
   signout: (
     <svg viewBox="0 0 24 24" {...stroke}>
       <path d="M14 4H6v16h8" />
@@ -211,7 +216,10 @@ const NAV: NavSection[] = [
   },
   {
     titleKey: null,
-    items: [{ href: "/settings", labelKey: "navSettings", icon: "gear" }],
+    items: [
+      { href: "/chat", labelKey: "chat", icon: "chat" },
+      { href: "/settings", labelKey: "navSettings", icon: "gear" },
+    ],
   },
 ];
 
