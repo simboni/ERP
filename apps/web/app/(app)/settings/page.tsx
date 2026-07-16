@@ -453,7 +453,8 @@ export default function SettingsPage() {
             style={{ maxWidth: 120, textTransform: "uppercase" }}
             onChange={(e) => patchField("currency", e.target.value.toUpperCase())}
           />
-          <label>Logo</label>
+          <label>{t("setLogo")}</label>
+          <p className="muted" style={{ marginTop: -8, marginBottom: 8 }}>{t("setLogoHint")}</p>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {profile.logo && (
               <img
@@ -481,7 +482,7 @@ export default function SettingsPage() {
                   disabled={busy}
                   onClick={() => void removeLogo()}
                 >
-                  Remove logo
+                  {t("setLogoRemove")}
                 </button>
               )}
             </div>

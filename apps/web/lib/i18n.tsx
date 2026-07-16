@@ -121,6 +121,9 @@ const DICT = {
     setPostalAddress: "Postal address",
     setPhysicalAddress: "Physical address",
     setCurrency: "Currency (ISO code)",
+    setLogo: "Logo",
+    setLogoHint: "Upload a PNG, JPG or GIF to appear on invoices, receipts and payslips",
+    setLogoRemove: "Remove logo",
     setBranchesIntro:
       "Shops, outlets and locations. Every sale, till and fiscal document is tagged to a branch.",
     setBranchCode: "Code",
@@ -422,6 +425,9 @@ const DICT = {
     setPostalAddress: "Anwani ya posta",
     setPhysicalAddress: "Anwani ya mahali",
     setCurrency: "Sarafu (msimbo wa ISO)",
+    setLogo: "Nembo",
+    setLogoHint: "Pakia PNG, JPG au GIF kuonekana kwenye matoleo ya ankara, risiti na slip za mishahara",
+    setLogoRemove: "Ondoa nembo",
     setBranchesIntro:
       "Maduka, matawi na maeneo. Kila mauzo, kasha na hati ya kodi huhusishwa na tawi.",
     setBranchCode: "Msimbo",
