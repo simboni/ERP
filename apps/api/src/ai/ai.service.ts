@@ -78,10 +78,15 @@ Rules:
 - Reply in the language the user writes in (English or Kiswahili).
 - If asked something outside the business/books, politely steer back.
 
-Format — your replies render as PLAIN TEXT chat bubbles:
-- NEVER use markdown tables, headings (#) or code blocks; they show as raw symbols. You may bold a key figure with **bold**; use "• " for short list lines.
-- Keep it SHORT. Lead with the answer in one sentence ("You have 25 overdue invoices totalling KES 789,073."). Then at most the top 3 items, one line each: "• Chebet Distributors — KES 68,620, due 7 Apr".
-- Never dump full lists into the chat. Summarize, then call link_page so the user gets a card straight to the page where the full list lives (e.g. Invoices for overdue lists, VAT for returns).
+Format — the chat bubble renders **bold**, bullet lists ("- item") and simple pipe tables. Use them:
+- Give the FULL answer with the real figures — do not withhold rows or hide detail behind a link. Open with a one-line headline ("You have 12 overdue invoices totalling KES 789,073."), then lay the data out clearly.
+- For a list of records (invoices, quotes, payments, customers) render a markdown table. Keep it to 3-4 columns so it reads in a narrow panel, e.g.:
+  | No. | Customer | Amount | Due |
+  | --- | --- | --- | --- |
+  | 72 | Chebet Distributors | KES 68,620 | 7 Apr |
+  Include every relevant row (cap very long lists around 15 and say how many more there are). For one record, use bold labels and bullet lines instead of a table.
+- Money as KES with thousands separators. Headings (#) and code blocks are NOT supported — use **bold** for emphasis.
+- ALWAYS end by calling link_page to pin a click-through card to the matching page so the user can open the live records. When the answer is about ONE invoice, pass its invoiceId to deep-link straight to that invoice.
 - One follow-up question maximum, only when genuinely useful.`;
 
 /** Raw JSON-Schema tool definitions (Anthropic.Tool shape). */
@@ -207,7 +212,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "link_page",
     description:
-      "Pin an app page as a card in the chat so the user can jump to where the data lives. Use after summarizing lists (overdue invoices -> invoices, VAT figures -> vat) instead of dumping full data into the reply.",
+      "Pin a click-through card in the chat that opens the app page where the data lives. Call this alongside your written answer so the user can jump to the live records (e.g. after listing invoices, pin the invoices page). For a single invoice, pass invoiceId to deep-link straight to that invoice's page.",
     input_schema: {
       type: "object",
       properties: {
@@ -217,7 +222,11 @@ const TOOLS: Anthropic.Tool[] = [
         },
         label: {
           type: "string",
-          description: "Optional short card label, e.g. 'Overdue invoices'",
+          description: "Optional short card label, e.g. 'Overdue invoices' or 'Open invoice #72'",
+        },
+        invoiceId: {
+          type: "string",
+          description: "When the answer is about ONE invoice, its id (from list_invoices) to deep-link to that invoice. Only valid with page 'invoices'.",
         },
       },
       required: ["page"],
@@ -518,20 +527,31 @@ export class AiService {
       case "link_page": {
         const page = PIN_PAGES[String(input.page ?? "")];
         if (!page) throw new Error("Unknown page");
+        // Optional deep-link to one invoice's page (validated UUID only).
+        const invoiceId = String(input.invoiceId ?? "").trim();
+        const isUuid =
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            invoiceId,
+          );
+        const deepLink =
+          String(input.page) === "invoices" && isUuid
+            ? `/invoices/view?id=${invoiceId}`
+            : null;
+        const href = deepLink ?? page.href;
         const label =
           typeof input.label === "string" && input.label.trim()
             ? input.label.trim().slice(0, 60)
             : page.label;
-        // One pin per page per turn; repeats would just clutter the chat.
-        if (!artifacts.some((a) => a.type === "page" && a.href === page.href)) {
+        // One pin per href per turn; repeats would just clutter the chat.
+        if (!artifacts.some((a) => a.type === "page" && a.href === href)) {
           artifacts.push({
             type: "page",
-            id: `page-${String(input.page)}`,
+            id: `page-${deepLink ? invoiceId : String(input.page)}`,
             label,
-            href: page.href,
+            href,
           });
         }
-        return { pinned: page.href };
+        return { pinned: href };
       }
 
       case "convert_quote_to_invoice":

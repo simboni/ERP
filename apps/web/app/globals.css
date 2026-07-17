@@ -1993,10 +1993,10 @@ button.ghost:hover { background: var(--card-2); }
   right: 24px;
   bottom: 96px;
   z-index: 56;
-  width: 400px;
+  width: 520px;
   max-width: calc(100vw - 48px);
-  height: 600px;
-  max-height: calc(100dvh - 128px);
+  height: 760px;
+  max-height: calc(100dvh - 112px);
   display: flex;
   flex-direction: column;
   background: var(--card);

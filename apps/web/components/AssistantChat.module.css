@@ -124,8 +124,55 @@
   border-bottom-left-radius: 6px;
 }
 .text {
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+/* Light-markdown blocks inside a reply bubble. */
+.mdP {
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+}
+.mdP:last-child {
+  margin-bottom: 0;
+}
+.mdList {
+  margin: 4px 0 8px;
+  padding-left: 18px;
+}
+.mdList li {
+  margin: 2px 0;
+}
+.mdTableWrap {
+  margin: 6px 0 8px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.mdTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+  white-space: nowrap;
+}
+.mdTable th,
+.mdTable td {
+  text-align: left;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.mdTable th {
+  background: var(--card-2);
+  font-weight: 650;
+  font-size: 0.76rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.mdTable tbody tr:last-child td,
+.mdTable tr:last-child td {
+  border-bottom: 0;
+}
+.mdTable td {
+  font-variant-numeric: tabular-nums;
 }
 
 .cards {

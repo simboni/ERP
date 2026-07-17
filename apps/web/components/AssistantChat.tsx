@@ -28,20 +28,125 @@ interface Turn {
   artifacts?: Artifact[];
 }
 
+/** Inline **bold** within a line; everything else stays plain text. */
+function inline(text: string, keyBase: string): ReactNode[] {
+  return text.split(/(\*\*[^*\n]+\*\*)/g).map((seg, i) =>
+    seg.startsWith("**") && seg.endsWith("**") && seg.length > 4 ? (
+      <strong key={`${keyBase}-${i}`}>{seg.slice(2, -2)}</strong>
+    ) : (
+      <span key={`${keyBase}-${i}`}>{seg}</span>
+    ),
+  );
+}
+
+const cells = (line: string): string[] =>
+  line
+    .trim()
+    .replace(/^\||\|$/g, "")
+    .split("|")
+    .map((c) => c.trim());
+
+const isTableLine = (l: string): boolean => l.includes("|");
+const isTableSep = (l: string): boolean =>
+  /^\s*\|?[\s:|-]*-{2,}[\s:|-]*\|?\s*$/.test(l) && l.includes("-");
+const isListLine = (l: string): boolean => /^\s*[-*•]\s+/.test(l);
+
 /**
- * Replies are plain text with at most **bold** figures. Render the bold
- * inline (newlines survive via pre-wrap) so no raw ** ever shows.
+ * Render an assistant reply as light markdown: pipe tables become styled,
+ * scrollable tables; "- " lines become bullet lists; blank lines split
+ * paragraphs; **bold** renders inline. Full information, laid out nicely —
+ * never raw pipes or asterisks.
  */
-function renderRich(text: string): ReactNode {
-  return text
-    .split(/(\*\*[^*\n]+\*\*)/g)
-    .map((seg, i) =>
-      seg.startsWith("**") && seg.endsWith("**") && seg.length > 4 ? (
-        <strong key={i}>{seg.slice(2, -2)}</strong>
-      ) : (
-        seg
-      ),
+function renderMessage(text: string): ReactNode {
+  const lines = text.replace(/\r/g, "").split("\n");
+  const blocks: ReactNode[] = [];
+  let i = 0;
+  let key = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Table: a row followed by a --- separator row.
+    if (isTableLine(line) && i + 1 < lines.length && isTableSep(lines[i + 1])) {
+      const header = cells(line);
+      const rows: string[][] = [];
+      i += 2;
+      while (i < lines.length && isTableLine(lines[i]) && !isTableSep(lines[i])) {
+        rows.push(cells(lines[i]));
+        i += 1;
+      }
+      blocks.push(
+        <div className={styles.mdTableWrap} key={`b${key++}`}>
+          <table className={styles.mdTable}>
+            <thead>
+              <tr>
+                {header.map((h, c) => (
+                  <th key={c}>{inline(h, `h${key}-${c}`)}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, ri) => (
+                <tr key={ri}>
+                  {r.map((cval, ci) => (
+                    <td key={ci}>{inline(cval, `c${key}-${ri}-${ci}`)}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>,
+      );
+      continue;
+    }
+
+    // Bullet list.
+    if (isListLine(line)) {
+      const items: string[] = [];
+      while (i < lines.length && isListLine(lines[i])) {
+        items.push(lines[i].replace(/^\s*[-*•]\s+/, ""));
+        i += 1;
+      }
+      blocks.push(
+        <ul className={styles.mdList} key={`b${key++}`}>
+          {items.map((it, ii) => (
+            <li key={ii}>{inline(it, `l${key}-${ii}`)}</li>
+          ))}
+        </ul>,
+      );
+      continue;
+    }
+
+    // Blank line → paragraph break.
+    if (line.trim() === "") {
+      i += 1;
+      continue;
+    }
+
+    // Paragraph: consecutive plain lines, kept on their own rows.
+    const para: string[] = [];
+    while (
+      i < lines.length &&
+      lines[i].trim() !== "" &&
+      !isListLine(lines[i]) &&
+      !(isTableLine(lines[i]) && i + 1 < lines.length && isTableSep(lines[i + 1]))
+    ) {
+      para.push(lines[i]);
+      i += 1;
+    }
+    blocks.push(
+      <p className={styles.mdP} key={`b${key++}`}>
+        {para.map((pl, pi) => (
+          <span key={pi}>
+            {inline(pl, `p${key}-${pi}`)}
+            {pi < para.length - 1 ? <br /> : null}
+          </span>
+        ))}
+      </p>,
     );
+  }
+
+  return blocks;
 }
 
 const SUGGESTION_KEYS = [
@@ -262,7 +367,7 @@ export default function AssistantChat({
                     ))}
                   </div>
                 )}
-                <div className={styles.text}>{renderRich(turn.content)}</div>
+                <div className={styles.text}>{renderMessage(turn.content)}</div>
                 {turn.artifacts && turn.artifacts.length > 0 && (
                   <div className={styles.cards}>
                     {turn.artifacts.map((a) => (
