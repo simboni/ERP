@@ -226,9 +226,15 @@ export class AiService {
     private readonly invoices: InvoicesService,
     private readonly compliance: ComplianceService,
   ) {
-    if (process.env.ANTHROPIC_API_KEY) {
+    // Tolerate the common paste accidents in the env var — surrounding
+    // whitespace/newlines or quotes — which otherwise leave the assistant
+    // reported as enabled while every real call fails with a 401.
+    const key = (process.env.ANTHROPIC_API_KEY ?? "")
+      .trim()
+      .replace(/^["']|["']$/g, "");
+    if (key) {
       // Reads ANTHROPIC_BASE_URL from env automatically (used by tests).
-      this.client = new Anthropic();
+      this.client = new Anthropic({ apiKey: key });
     }
   }
 

@@ -4,12 +4,17 @@ import {
   Controller,
   Get,
   HttpCode,
+  NotFoundException,
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
+  Res,
   UseGuards,
 } from "@nestjs/common";
+import type { Response } from "express";
 import type { TenantTokenClaims } from "@jenga/shared";
+import { renderReceiptPdf } from "./receipt-pdf";
 import {
   JwtAuthGuard,
   Roles,
@@ -76,15 +81,89 @@ export class PaymentsController {
   }
 
   @Get()
-  async list(@TenantClaims() claims: TenantTokenClaims) {
+  async list(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Query("invoiceId") invoiceId?: string,
+  ) {
     return this.db.withTenant(claims.tid, claims.sub, async (client) => {
-      const res = await client.query(
-        `SELECT id, rail, state, amount_cents, msisdn, account_ref,
-                receipt_number, invoice_id, confirmed_at, created_at
-         FROM payments ORDER BY created_at DESC LIMIT 100`,
-      );
+      const res = invoiceId
+        ? await client.query(
+            `SELECT id, rail, state, amount_cents, msisdn, account_ref,
+                    receipt_number, invoice_id, confirmed_at, created_at
+             FROM payments WHERE invoice_id = $1
+             ORDER BY created_at DESC LIMIT 100`,
+            [invoiceId],
+          )
+        : await client.query(
+            `SELECT id, rail, state, amount_cents, msisdn, account_ref,
+                    receipt_number, invoice_id, confirmed_at, created_at
+             FROM payments ORDER BY created_at DESC LIMIT 100`,
+          );
       return res.rows;
     });
+  }
+
+  /**
+   * Official receipt for one payment — issued for EVERY confirmed payment,
+   * partial or full. Shows the amount received plus the invoice's running
+   * position so instalment payers get proof of payment with balance due.
+   */
+  @Get(":id/receipt.pdf")
+  async receiptPdf(
+    @TenantClaims() claims: TenantTokenClaims,
+    @Param("id", ParseUUIDPipe) paymentId: string,
+    @Res() res: Response,
+  ) {
+    const data = await this.db.withTenant(claims.tid, claims.sub, async (client) => {
+      const r = await client.query(
+        `SELECT p.id, p.rail, p.state, p.amount_cents, p.receipt_number,
+                p.confirmed_at,
+                i.invoice_no, i.total_cents, i.amount_paid_cents,
+                c.name AS customer_name, c.kra_pin AS customer_pin,
+                t.name AS business_name, t.logo
+         FROM payments p
+         JOIN invoices i ON i.id = p.invoice_id
+         JOIN customers c ON c.id = i.customer_id
+         JOIN tenants t ON t.id = p.tenant_id
+         WHERE p.id = $1`,
+        [paymentId],
+      );
+      return r.rows[0];
+    });
+    if (!data) {
+      throw new NotFoundException(
+        "Payment not found or not yet matched to an invoice",
+      );
+    }
+    if (data.state !== "confirmed") {
+      throw new BadRequestException(
+        `Receipts are only issued for confirmed payments (state: ${data.state})`,
+      );
+    }
+    const pdf = await renderReceiptPdf({
+      businessName: data.business_name,
+      logo: data.logo || null,
+      receiptNumber: data.receipt_number ?? data.id,
+      paymentDate: data.confirmed_at
+        ? new Date(data.confirmed_at).toISOString().slice(0, 10)
+        : null,
+      rail: data.rail,
+      customerName: data.customer_name,
+      customerPin: data.customer_pin,
+      invoiceNo: data.invoice_no,
+      amountReceivedCents: Number(data.amount_cents),
+      invoiceTotalCents: Number(data.total_cents),
+      amountPaidToDateCents: Number(data.amount_paid_cents),
+    });
+    res
+      .status(200)
+      .set({
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `inline; filename="receipt-${String(
+          data.receipt_number ?? data.invoice_no,
+        ).replace(/["\\\r\n]/g, "_")}.pdf"`,
+      })
+      .send(pdf);
   }
 
   /** Exception queue: confirmed money that matched no invoice. */

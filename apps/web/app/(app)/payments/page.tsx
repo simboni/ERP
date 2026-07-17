@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, fmtKes, fmtKes0, getTenantToken } from "@/lib/api";
+import { api, fmtKes, fmtKes0, getApiBase, getTenantToken } from "@/lib/api";
 import { DataTable } from "@/components/DataTable";
 import { SearchSelect } from "@/components/SearchSelect";
 
@@ -71,6 +71,18 @@ export default function PaymentsPage() {
     }
     load().catch((e) => setError(e instanceof Error ? e.message : "load failed"));
   }, [load, router]);
+
+  const openReceipt = async (paymentId: string): Promise<void> => {
+    const res = await fetch(
+      `${await getApiBase()}/tenants/current/payments/${paymentId}/receipt.pdf`,
+      { headers: { Authorization: `Bearer ${getTenantToken()}` } },
+    );
+    if (!res.ok) {
+      setError("Could not generate the receipt");
+      return;
+    }
+    window.open(URL.createObjectURL(await res.blob()), "_blank");
+  };
 
   const match = async (paymentId: string): Promise<void> => {
     const invoiceId = pick[paymentId];
@@ -336,6 +348,21 @@ export default function PaymentsPage() {
                   ) : (
                     <span className="muted">unmatched</span>
                   ),
+              },
+              {
+                key: "receipt",
+                label: "",
+                value: () => "",
+                render: (p) =>
+                  p.state === "confirmed" && p.invoice_id ? (
+                    <button
+                      type="button"
+                      className="secondary dt-btn"
+                      onClick={() => void openReceipt(p.id)}
+                    >
+                      🧾 Receipt
+                    </button>
+                  ) : null,
               },
             ]}
           />

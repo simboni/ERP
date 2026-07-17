@@ -28,10 +28,28 @@ interface InvoiceDetail {
   }[];
 }
 
+interface PaymentRow {
+  id: string;
+  rail: string;
+  state: string;
+  amount_cents: string;
+  receipt_number: string | null;
+  confirmed_at: string | null;
+}
+
+const RAIL_LABELS: Record<string, string> = {
+  cash: "Cash",
+  bank: "Bank",
+  mpesa: "M-Pesa",
+  mpesa_c2b: "M-Pesa",
+  stk: "M-Pesa",
+};
+
 function InvoiceView() {
   const router = useRouter();
   const id = useSearchParams().get("id") ?? "";
   const [inv, setInv] = useState<InvoiceDetail | null>(null);
+  const [pays, setPays] = useState<PaymentRow[]>([]);
   const [msisdn, setMsisdn] = useState("");
   const [payRail, setPayRail] = useState<"cash" | "bank" | "mpesa">("cash");
   const [payAmount, setPayAmount] = useState("");
@@ -47,6 +65,13 @@ function InvoiceView() {
 
   const load = useCallback(async (): Promise<void> => {
     setInv(await api<InvoiceDetail>(`/tenants/current/invoices/${id}`));
+    try {
+      setPays(
+        await api<PaymentRow[]>(`/tenants/current/payments?invoiceId=${id}`),
+      );
+    } catch {
+      // Payment history is auxiliary — never block the invoice itself.
+    }
   }, [id]);
 
   useEffect(() => {
@@ -75,6 +100,19 @@ function InvoiceView() {
     const res = await fetch(`${await getApiBase()}/tenants/current/invoices/${id}/pdf`, {
       headers: { Authorization: `Bearer ${getTenantToken()}` },
     });
+    const blob = await res.blob();
+    window.open(URL.createObjectURL(blob), "_blank");
+  };
+
+  const openReceipt = async (paymentId: string): Promise<void> => {
+    const res = await fetch(
+      `${await getApiBase()}/tenants/current/payments/${paymentId}/receipt.pdf`,
+      { headers: { Authorization: `Bearer ${getTenantToken()}` } },
+    );
+    if (!res.ok) {
+      setError("Could not generate the receipt");
+      return;
+    }
     const blob = await res.blob();
     window.open(URL.createObjectURL(blob), "_blank");
   };
@@ -153,6 +191,54 @@ function InvoiceView() {
 
       {msg && <div className="card" style={{ borderColor: "var(--brand)" }}>{msg}</div>}
       {error && <div className="err">{error}</div>}
+
+      {pays.filter((p) => p.state === "confirmed").length > 0 && (
+        <div className="card">
+          <div className="card-head">
+            <h3>Payments received</h3>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Method</th>
+                <th>Receipt no.</th>
+                <th>Amount</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {pays
+                .filter((p) => p.state === "confirmed")
+                .map((p) => (
+                  <tr key={p.id}>
+                    <td>
+                      {p.confirmed_at
+                        ? new Date(p.confirmed_at).toISOString().slice(0, 10)
+                        : "—"}
+                    </td>
+                    <td>{RAIL_LABELS[p.rail] ?? p.rail}</td>
+                    <td>{p.receipt_number ?? "—"}</td>
+                    <td>{fmtKes(p.amount_cents)}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="secondary dt-btn"
+                        onClick={() => void openReceipt(p.id)}
+                      >
+                        🧾 Receipt
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+          <p className="muted" style={{ marginBottom: 0 }}>
+            Every payment gets its own receipt — partial payments show the
+            balance still due.
+          </p>
+        </div>
+      )}
 
       {inv.status === "draft" && (
         <div className="card">

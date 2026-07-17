@@ -334,24 +334,46 @@ export class PaymentsService {
     // The reconcile engine stores the M-Pesa rail as 'mpesa_c2b'/'stk';
     // for a hand-keyed M-Pesa entry we use the plain 'mpesa' float rail.
     const railStored = args.rail === "mpesa" ? "mpesa" : args.rail;
-    const ref =
-      args.reference?.trim() ||
-      `${args.rail.toUpperCase()}-${inv.invoice_no}`;
-    const res = await client.query(
-      `INSERT INTO payments
-         (tenant_id, rail, state, amount_cents, account_ref,
-          receipt_number, invoice_id, confirmed_at)
-       VALUES ($1, $2, 'confirmed', $3, $4, $5, $6, now())
-       RETURNING id`,
-      [
-        args.tenantId,
-        railStored,
-        args.amountCents,
-        String(inv.invoice_no),
-        ref,
-        args.invoiceId,
-      ],
-    );
+    // receipt_number is UNIQUE per tenant, so the generated fallback must
+    // differ per instalment — "CASH-12", then "CASH-12-2", "CASH-12-3"…
+    // (a fixed default made every second part-payment a 500).
+    let ref = args.reference?.trim() || "";
+    if (!ref) {
+      const prior = await client.query(
+        `SELECT count(*)::int AS n FROM payments WHERE invoice_id = $1`,
+        [args.invoiceId],
+      );
+      const seq = Number(prior.rows[0].n) + 1;
+      ref =
+        `${args.rail.toUpperCase()}-${inv.invoice_no}` +
+        (seq > 1 ? `-${seq}` : "");
+    }
+    let res;
+    try {
+      res = await client.query(
+        `INSERT INTO payments
+           (tenant_id, rail, state, amount_cents, account_ref,
+            receipt_number, invoice_id, confirmed_at)
+         VALUES ($1, $2, 'confirmed', $3, $4, $5, $6, now())
+         RETURNING id`,
+        [
+          args.tenantId,
+          railStored,
+          args.amountCents,
+          String(inv.invoice_no),
+          ref,
+          args.invoiceId,
+        ],
+      );
+    } catch (err) {
+      if ((err as { code?: string }).code === "23505") {
+        throw new BadRequestException(
+          `Reference "${ref}" has already been used for another payment — ` +
+            "enter a unique reference (e.g. the M-Pesa code or cheque number).",
+        );
+      }
+      throw err;
+    }
     const paymentId = res.rows[0].id as string;
     const m = await this.reconcile(
       client,
