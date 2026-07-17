@@ -2034,3 +2034,49 @@ button.ghost:hover { background: var(--card-2); }
 @media (prefers-reduced-motion: reduce) {
   .ai-panel, .ai-panel-backdrop { animation: none; }
 }
+
+/* ---- landing: AI assistant highlight ---- */
+.lp-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  margin-bottom: 16px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: var(--brand-ink);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  box-shadow: 0 4px 14px rgba(11, 107, 56, 0.28);
+  transition: transform 0.12s ease;
+}
+.lp-hero-badge:hover { text-decoration: none; transform: translateY(-1px); }
+.lp-hero-badge-spark { font-size: 0.95rem; line-height: 1; }
+
+.lp-ai {
+  background:
+    radial-gradient(1200px 480px at 78% -10%, var(--brand-soft), transparent 60%),
+    var(--card);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.lp-ai-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  margin-bottom: 14px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: var(--brand-ink);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.lp-ai-cta {
+  display: flex;
+  justify-content: center;
+  margin-top: 34px;
+}

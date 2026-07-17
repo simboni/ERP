@@ -25,7 +25,17 @@ const COPY = {
   navProduct: { en: "Product", sw: "Bidhaa" },
   navIndustries: { en: "Industries", sw: "Biashara" },
   navFeatures: { en: "Features", sw: "Vipengele" },
+  navAssistant: { en: "AI assistant", sw: "Msaidizi wa AI" },
   navPricing: { en: "Pricing", sw: "Bei" },
+  newBadge: { en: "New · AI assistant", sw: "Mpya · Msaidizi wa AI" },
+  aiTitle: {
+    en: "Meet Jenga Assistant — your books, on call",
+    sw: "Kutana na Msaidizi wa Jenga — hesabu zako, wakati wowote",
+  },
+  aiSub: {
+    en: "Ask about your business in plain English or Kiswahili and get a real answer — the actual figures, laid out clearly, with a one-tap link to the record. Snap a photo of a supplier bill and it drafts the entry. Ask it to quote a customer and it prepares the draft. You review, issue and send — it never fiscalises or moves money on its own.",
+    sw: "Uliza kuhusu biashara yako kwa Kiingereza au Kiswahili upate jibu halisi — takwimu zenyewe, wazi, na kiungo cha mguso mmoja hadi rekodi. Piga picha ya bili ya msambazaji nayo iandae ingizo. Iombe inukuu mteja nayo iandae rasimu. Wewe hukagua, hutoa na kutuma — haiwasilishi wala kuhamisha pesa yenyewe.",
+  },
   signIn: { en: "Sign in", sw: "Ingia" },
   startFree: { en: "Start free", sw: "Anza bure" },
   tryLive: { en: "Try it live", sw: "Ijaribu sasa" },
@@ -44,8 +54,8 @@ const COPY = {
     sw: "Hakuna kadi · Onyesho la saa 24 · Kiingereza na Kiswahili",
   },
   trust: {
-    en: "eTIMS ready · M-Pesa auto-reconcile · PAYE · NSSF · SHIF · Housing Levy · English & Kiswahili",
-    sw: "eTIMS tayari · M-Pesa · PAYE · NSSF · SHIF · Ushuru wa Nyumba · Kiingereza na Kiswahili",
+    en: "AI assistant · eTIMS ready · M-Pesa auto-reconcile · PAYE · NSSF · SHIF · Housing Levy · English & Kiswahili",
+    sw: "Msaidizi wa AI · eTIMS tayari · M-Pesa · PAYE · NSSF · SHIF · Ushuru wa Nyumba · Kiingereza na Kiswahili",
   },
   industriesTitle: { en: "One platform, tailored to your trade", sw: "Jukwaa moja, kwa biashara yako" },
   industriesSub: {
@@ -92,6 +102,7 @@ const INDUSTRIES: IndustryChip[] = [
 
 type Feature = { icon: keyof typeof Icons; title: { en: string; sw: string }; body: { en: string; sw: string } };
 const FEATURES: Feature[] = [
+  { icon: "spark", title: { en: "AI assistant", sw: "Msaidizi wa AI" }, body: { en: "Ask about your books in English or Kiswahili — and have quotes and drafts prepared for you.", sw: "Uliza kuhusu hesabu zako kwa Kiingereza au Kiswahili — na uandaliwe nukuu na rasimu." } },
   { icon: "till", title: { en: "Point of sale", sw: "Kasha (POS)" }, body: { en: "A fast, offline-friendly till for over-the-counter sales.", sw: "Kasha la haraka kwa mauzo ya kaunta." } },
   { icon: "invoice", title: { en: "Invoicing & quotes", sw: "Ankara na nukuu" }, body: { en: "Send eTIMS invoices and estimates that convert in one tap.", sw: "Tuma ankara za eTIMS na nukuu zinazogeuka kwa mguso mmoja." } },
   { icon: "payment", title: { en: "Payments & reconciliation", sw: "Malipo na ulinganisho" }, body: { en: "Cash, bank and M-Pesa — matched to invoices automatically.", sw: "Pesa, benki na M-Pesa — vinalinganishwa na ankara moja kwa moja." } },
@@ -108,12 +119,20 @@ const FEATURES: Feature[] = [
 
 type Why = { emoji: string; title: { en: string; sw: string }; body: { en: string; sw: string } };
 const WHY: Why[] = [
+  { emoji: "✦", title: { en: "An AI that knows your books", sw: "AI inayojua hesabu zako" }, body: { en: "Ask questions and prepare documents just by chatting — answers come with the real figures and a link to the record.", sw: "Uliza maswali na uandae hati kwa kuzungumza — majibu huja na takwimu halisi na kiungo cha rekodi." } },
   { emoji: "🧾", title: { en: "KRA eTIMS, done", sw: "KRA eTIMS, imekamilika" }, body: { en: "Every sale is fiscalised to eTIMS and VAT at 16% is worked out and filed for you.", sw: "Kila mauzo linawasilishwa eTIMS na VAT ya 16% inakokotolewa na kuwasilishwa." } },
   { emoji: "📱", title: { en: "M-Pesa that reconciles", sw: "M-Pesa inayolinganisha" }, body: { en: "Payments land against the right invoice on their own — no more manual matching.", sw: "Malipo yanawekwa kwenye ankara sahihi yenyewe — bila kulinganisha kwa mkono." } },
   { emoji: "👥", title: { en: "Payroll that complies", sw: "Mishahara inayotii" }, body: { en: "PAYE, NSSF, SHIF and the Housing Levy are computed to the shilling, every month.", sw: "PAYE, NSSF, SHIF na Ushuru wa Nyumba vinakokotolewa kila mwezi." } },
   { emoji: "🔐", title: { en: "Role-based access", sw: "Ufikiaji kwa majukumu" }, body: { en: "Give your cashier the till, your HR person HR only. Owners see everything.", sw: "Mpe keshia kasha, mtu wa HR aone HR pekee. Wamiliki wanaona yote." } },
   { emoji: "📚", title: { en: "Proper books", sw: "Hesabu sahihi" }, body: { en: "Double-entry accounting behind every screen — P&L and balance sheet, always current.", sw: "Uhasibu wa kuingiza mara mbili nyuma ya kila skrini — daima wa sasa." } },
   { emoji: "🌍", title: { en: "English & Kiswahili", sw: "Kiingereza na Kiswahili" }, body: { en: "Work in the language your team is comfortable with, on any phone.", sw: "Fanya kazi kwa lugha timu yako inavyopenda, kwa simu yoyote." } },
+];
+
+const AI_POINTS: Why[] = [
+  { emoji: "💬", title: { en: "Ask your books anything", sw: "Uliza hesabu zako chochote" }, body: { en: "“Who owes me?” “What’s my VAT this month?” “Show June invoices over 200,000.” Answered instantly, with the numbers.", sw: "“Nani ananidai?” “VAT yangu mwezi huu?” “Onyesha ankara za Juni zaidi ya 200,000.” Hujibiwa papo hapo, na takwimu." } },
+  { emoji: "📸", title: { en: "Snap a bill or receipt", sw: "Piga picha ya bili au risiti" }, body: { en: "Photograph a supplier bill, receipt or LPO and the assistant reads it and drafts the entry — VAT worked out for you.", sw: "Piga picha ya bili, risiti au LPO nayo isome na kuandaa ingizo — VAT ikikokotolewa." } },
+  { emoji: "⚡", title: { en: "Draft quotes & invoices", sw: "Andaa nukuu na ankara" }, body: { en: "Describe the job and it prepares the quote or draft invoice, priced with VAT, ready for you to review.", sw: "Eleza kazi nayo iandae nukuu au ankara ya rasimu, yenye VAT, tayari kukagua." } },
+  { emoji: "🔒", title: { en: "You stay in control", sw: "Wewe unabaki kudhibiti" }, body: { en: "It only prepares drafts and points you to the data. Issuing, fiscalising and payments always need a human.", sw: "Huandaa rasimu tu na kukuelekeza kwenye data. Kutoa, kuwasilisha na malipo huhitaji binadamu daima." } },
 ];
 
 export default function LandingPage() {
@@ -189,6 +208,7 @@ export default function LandingPage() {
             Jenga <span>ERP</span>
           </a>
           <nav className="lp-nav-links">
+            <a href="#assistant">{tr(COPY.navAssistant)}</a>
             <a href="#industries">{tr(COPY.navIndustries)}</a>
             <a href="#features">{tr(COPY.navFeatures)}</a>
             <a href="#why">{tr(COPY.navProduct)}</a>
@@ -218,6 +238,9 @@ export default function LandingPage() {
       <section className="lp-hero" id="top">
         <div className="lp-hero-grid">
           <div className="lp-hero-copy lp-reveal">
+            <a href="#assistant" className="lp-hero-badge">
+              <span className="lp-hero-badge-spark">✦</span> {tr(COPY.newBadge)}
+            </a>
             <span className="lp-kicker">{tr(COPY.heroKicker)}</span>
             <h1 className="lp-h1">{tr(COPY.heroTitle)}</h1>
             <p className="lp-lead">{tr(COPY.heroSub)}</p>
@@ -268,6 +291,31 @@ export default function LandingPage() {
         </div>
         {demoError && <p className="lp-demo-err">{demoError}</p>}
         <p className="lp-demo-fine">{tr(COPY.demoExpiry)}</p>
+      </section>
+
+      {/* ---- AI assistant highlight ---- */}
+      <section className="lp-section lp-ai" id="assistant">
+        <div className="lp-section-head">
+          <span className="lp-ai-eyebrow">
+            <span className="lp-hero-badge-spark">✦</span> {tr(COPY.newBadge)}
+          </span>
+          <h2 className="lp-h2">{tr(COPY.aiTitle)}</h2>
+          <p className="lp-section-sub">{tr(COPY.aiSub)}</p>
+        </div>
+        <div className="lp-why-grid">
+          {AI_POINTS.map((p) => (
+            <div className="lp-why" key={p.title.en}>
+              <span className="lp-why-emoji">{p.emoji}</span>
+              <h3>{tr(p.title)}</h3>
+              <p>{tr(p.body)}</p>
+            </div>
+          ))}
+        </div>
+        <div className="lp-ai-cta">
+          <a href="#industries" className="lp-btn lp-btn-primary lp-btn-lg">
+            {tr(COPY.tryLive)}
+          </a>
+        </div>
       </section>
 
       {/* ---- features grid ---- */}
@@ -422,6 +470,7 @@ export default function LandingPage() {
             <p>{L === "sw" ? "Jukwaa la biashara lililojengwa kwa Kenya." : "The all-in-one business platform built for Kenya."}</p>
           </div>
           <div className="lp-footer-links">
+            <a href="#assistant">{tr(COPY.navAssistant)}</a>
             <a href="#features">{tr(COPY.navFeatures)}</a>
             <a href="#industries">{tr(COPY.navIndustries)}</a>
             <a href="#pricing">{tr(COPY.navPricing)}</a>
