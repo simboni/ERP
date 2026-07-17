@@ -1899,3 +1899,65 @@ button.ghost:hover { background: var(--card-2); }
   .lp-spinner { animation-duration: 1.4s; }
   .lp-chip:hover, .lp-feature:hover, .lp-step, .lp-btn:active { transform: none; }
 }
+
+/* ---- assistant entry points (top bar + glowing FAB) ---- */
+.topbar-ai {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand);
+  box-shadow: 0 0 10px var(--brand-soft);
+  transition: background 0.12s, color 0.12s;
+}
+.topbar-ai svg { width: 20px; height: 20px; }
+.topbar-ai:hover {
+  text-decoration: none;
+  background: var(--brand);
+  color: var(--brand-ink);
+}
+/* Phones get the FAB instead — keep the crowded top bar clean. */
+@media (max-width: 760px) { .topbar-ai { display: none; } }
+
+.ai-fab {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 45; /* above content, below modals/notification panel (60) */
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--brand), var(--brand-strong));
+  color: var(--brand-ink);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25), 0 0 0 0 rgba(52, 173, 108, 0.55);
+  animation: aiFabGlow 2.4s infinite ease-out;
+  transition: transform 0.12s ease;
+}
+.ai-fab svg { width: 26px; height: 26px; }
+.ai-fab:hover {
+  text-decoration: none;
+  transform: scale(1.07);
+}
+@keyframes aiFabGlow {
+  0% { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25), 0 0 0 0 rgba(52, 173, 108, 0.55); }
+  70% { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25), 0 0 0 14px rgba(52, 173, 108, 0); }
+  100% { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25), 0 0 0 0 rgba(52, 173, 108, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-fab {
+    animation: none;
+    /* Still glows, just doesn't pulse. */
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25), 0 0 14px rgba(52, 173, 108, 0.55);
+  }
+}
+@media (max-width: 760px) {
+  .ai-fab { right: 16px; bottom: 16px; width: 54px; height: 54px; }
+}

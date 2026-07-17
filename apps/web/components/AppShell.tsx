@@ -472,6 +472,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <span className="topbar-tenant">{tenantName}</span>
           <span className="topbar-spacer" />
           <div className="topbar-tools">
+          <Link
+            href="/assistant"
+            className="topbar-ai"
+            aria-label={t("aiTitle")}
+            title={t("aiTitle")}
+          >
+            {Icons.spark}
+          </Link>
           <button
             type="button"
             className="topbar-search"
@@ -578,6 +586,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </span>
         </header>
         <main>{children}</main>
+        {/* Glowing quick-launch for the assistant on every screen; hidden on
+            full-bleed pages that own the bottom edge (assistant, chat). */}
+        {pathname !== "/assistant" && pathname !== "/chat" && (
+          <Link
+            href="/assistant"
+            className="ai-fab"
+            aria-label={t("aiTitle")}
+            title={t("aiTitle")}
+          >
+            {Icons.spark}
+          </Link>
+        )}
       </div>
       <CommandPalette
         open={paletteOpen}
