@@ -187,11 +187,82 @@
   }
 }
 
+.attRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.attChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 8px;
+  padding: 2px 8px;
+  font-size: 0.78rem;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.assistant .attChip {
+  background: var(--card-2);
+  border-color: var(--line);
+}
+
+.pendRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.pendChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 5px 8px 5px 10px;
+  font-size: 0.82rem;
+  color: var(--ink-2);
+  max-width: 280px;
+}
+.pendRemove {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 2px 4px;
+  min-height: 0;
+  line-height: 1;
+}
+.pendRemove:hover {
+  color: var(--danger, #c0392b);
+}
+
 .composer {
   display: flex;
   gap: 10px;
   margin-top: 12px;
   align-items: flex-end;
+}
+.attachBtn {
+  min-height: 46px;
+  width: 46px;
+  padding: 0;
+  flex: 0 0 auto;
+  background: var(--card);
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+  border-radius: 12px;
+  font-size: 1.05rem;
+}
+.attachBtn:hover:not(:disabled) {
+  border-color: var(--brand);
 }
 .composer textarea {
   flex: 1;

@@ -24,15 +24,31 @@ export interface AskResult {
   artifacts: AiArtifact[];
 }
 
+/**
+ * A file attached to a user turn. Full bytes (dataBase64) travel only on the
+ * newest turn; for older turns the client re-sends the name alone and the
+ * model sees a cheap text marker instead of megabytes of base64 again.
+ */
+export interface AiAttachmentInput {
+  name: string;
+  mime?: string;
+  dataBase64?: string;
+}
+
 /** Client-visible chat turns (tool exchanges stay server-side per request). */
 export interface AiTurn {
   role: "user" | "assistant";
   content: string;
+  attachments?: AiAttachmentInput[];
 }
 
 const MODEL = "claude-opus-4-8";
 const MAX_LOOP = 8;
 const MAX_TURNS = 20;
+const MAX_ATTACHMENTS = 3;
+const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024; // matches the Documents module
+const IMAGE_MIMES = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
+type ImageMime = (typeof IMAGE_MIMES)[number];
 
 const SYSTEM_PROMPT = `You are the Jenga Assistant inside Jenga ERP, a business platform for Kenyan SMEs (invoicing, quotes, VAT/eTIMS compliance, M-Pesa payments, payroll).
 
@@ -44,6 +60,7 @@ Rules:
 - VAT: line prices are VAT-EXCLUSIVE. Default vatRate is "0.16" (standard 16%) unless the user says zero-rated ("0") or exempt ("exempt").
 - You may CREATE drafts (quotes, draft invoices) and convert quotes to draft invoices. You can NOT issue invoices, fiscalize with KRA, send documents, or move money — after creating a draft, tell the user to review and issue it from the linked page. This is a deliberate control: issuing is a legal/tax act that requires a human.
 - If a customer name doesn't match exactly, use find_customers and confirm your best match with the user; only create a new customer when they clearly want one.
+- The user may attach photos or PDFs (receipts, supplier bills, LPOs, price lists, handwritten notes). Read them carefully and extract names, dates, quantities and amounts faithfully — never guess an unreadable figure, ask instead. Totals on receipts/bills are usually VAT-INCLUSIVE: for standard-rated lines derive the VAT-exclusive unit price (divide by 1.16) and say you did so. State what you extracted before creating any document from it.
 - Reply in the language the user writes in (English or Kiswahili). Be brief and concrete: lead with the outcome, then key figures.
 - If asked something outside the business/books, politely steer back.`;
 
@@ -227,14 +244,50 @@ export class AiService {
     }
     const history = (turns ?? [])
       .filter((t) => (t.role === "user" || t.role === "assistant") && typeof t.content === "string")
-      .slice(-MAX_TURNS)
-      .map((t) => ({ role: t.role, content: t.content.slice(0, 4000) }));
-    if (!history.length || history[history.length - 1].role !== "user") {
-      throw new BadRequestException("Last turn must be a user message");
+      .slice(-MAX_TURNS);
+    const last = history[history.length - 1];
+    const lastAtts = this.cleanAttachments(last?.attachments);
+    if (
+      !last ||
+      last.role !== "user" ||
+      (!last.content.trim() && !lastAtts.some((a) => a.dataBase64))
+    ) {
+      throw new BadRequestException(
+        "Last turn must be a user message with text or an attachment",
+      );
     }
 
+    // Validate + convert the newest turn's files into model blocks first so a
+    // bad file 400s before anything is persisted or sent.
+    const freshBlocks: Anthropic.ContentBlockParam[] = [];
+    const freshFiles: { name: string; mime: string; bytes: Buffer }[] = [];
+    for (const a of lastAtts) {
+      if (!a.dataBase64) continue;
+      const { block, bytes, mime } = this.toAttachmentBlock(a);
+      freshBlocks.push(block);
+      freshFiles.push({ name: a.name, mime, bytes });
+    }
+    if (freshFiles.length > 0) await this.fileAttachments(claims, freshFiles);
+
     const artifacts: AiArtifact[] = [];
-    const messages: Anthropic.MessageParam[] = history;
+    const messages: Anthropic.MessageParam[] = history.map((t, idx) => {
+      const text = t.content.slice(0, 4000);
+      const atts = idx === history.length - 1 ? lastAtts : this.cleanAttachments(t.attachments);
+      if (t.role === "assistant" || atts.length === 0) {
+        return { role: t.role, content: text };
+      }
+      if (idx === history.length - 1 && freshBlocks.length > 0) {
+        const blocks: Anthropic.ContentBlockParam[] = [...freshBlocks];
+        if (text.trim()) blocks.push({ type: "text", text });
+        return { role: "user", content: blocks };
+      }
+      // Older (or stripped) turns: a text marker keeps the model aware a file
+      // was shared without re-sending its bytes on every request.
+      const markers = atts
+        .map((a) => `[Attached file: ${a.name.slice(0, 120)}]`)
+        .join(" ");
+      return { role: "user", content: `${text}\n${markers}`.trim() };
+    });
 
     let reply = "";
     for (let i = 0; i < MAX_LOOP; i++) {
@@ -455,6 +508,104 @@ export class AiService {
         unitPriceCents: Math.round(price * 100),
         vatRate: vr,
       };
+    });
+  }
+
+  /** Drop malformed entries and cap the count; never trust client arrays. */
+  private cleanAttachments(raw: unknown): AiAttachmentInput[] {
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter(
+        (a): a is AiAttachmentInput =>
+          !!a && typeof a === "object" && typeof (a as AiAttachmentInput).name === "string" &&
+          (a as AiAttachmentInput).name.trim().length > 0,
+      )
+      .slice(0, MAX_ATTACHMENTS);
+  }
+
+  /** Decode + validate one attachment and build its Anthropic content block. */
+  private toAttachmentBlock(a: AiAttachmentInput): {
+    block: Anthropic.ContentBlockParam;
+    bytes: Buffer;
+    mime: string;
+  } {
+    const name = a.name.trim().slice(0, 200);
+    const mime = (a.mime ?? "").toLowerCase().split(";")[0].trim();
+    const bytes = Buffer.from(a.dataBase64 ?? "", "base64");
+    if (bytes.length === 0) {
+      throw new BadRequestException(`${name}: file is empty or not valid base64`);
+    }
+    if (bytes.length > MAX_ATTACHMENT_BYTES) {
+      throw new BadRequestException(
+        `${name}: file too large: ${Math.round(bytes.length / 1024 / 1024)}MB (max 5MB)`,
+      );
+    }
+    // Re-encode so whitespace/url-safe variants normalize to clean base64.
+    const data = bytes.toString("base64");
+    if ((IMAGE_MIMES as readonly string[]).includes(mime)) {
+      return {
+        block: {
+          type: "image",
+          source: { type: "base64", media_type: mime as ImageMime, data },
+        },
+        bytes,
+        mime,
+      };
+    }
+    if (mime === "application/pdf") {
+      return {
+        block: {
+          type: "document",
+          source: { type: "base64", media_type: "application/pdf", data },
+        },
+        bytes,
+        mime,
+      };
+    }
+    throw new BadRequestException(
+      `${name}: only images (JPEG, PNG, GIF, WebP) and PDFs are supported`,
+    );
+  }
+
+  /**
+   * File assistant uploads into the Documents cabinet (an "Assistant" folder),
+   * mirroring chat: the source receipt/bill outlives the conversation and is
+   * there for the auditor.
+   */
+  private async fileAttachments(
+    claims: TenantTokenClaims,
+    files: { name: string; mime: string; bytes: Buffer }[],
+  ): Promise<void> {
+    await this.db.withTenant(claims.tid, claims.sub, async (c) => {
+      const existing = await c.query(
+        `SELECT id FROM document_folders WHERE name = 'Assistant' AND parent_id IS NULL LIMIT 1`,
+      );
+      const folderId =
+        existing.rows[0]?.id ??
+        (
+          await c.query(
+            `INSERT INTO document_folders (tenant_id, name, parent_id, created_by)
+             VALUES ($1, 'Assistant', NULL, $2) RETURNING id`,
+            [claims.tid, claims.sub],
+          )
+        ).rows[0].id;
+      for (const f of files) {
+        await c.query(
+          `INSERT INTO documents
+             (tenant_id, name, mime, size_bytes, data, uploaded_by,
+              folder_id, category, description)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'other', 'Uploaded to the Jenga Assistant')`,
+          [
+            claims.tid,
+            f.name.trim().slice(0, 200),
+            f.mime,
+            f.bytes.length,
+            f.bytes,
+            claims.sub,
+            folderId,
+          ],
+        );
+      }
     });
   }
 

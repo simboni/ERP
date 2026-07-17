@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
+import type { NestExpressApplication } from "@nestjs/platform-express";
 import express from "express";
 import { existsSync } from "node:fs";
 import { join, sep } from "node:path";
@@ -104,7 +105,10 @@ process.on("unhandledRejection", (reason) => {
 
 async function bootstrap(): Promise<void> {
   await preflightDb();
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // Uploads travel as base64 JSON (documents, chat, assistant attachments);
+  // the express default of 100kb would reject any real photo or PDF.
+  app.useBodyParser("json", { limit: "12mb" });
   // WEB_ORIGINS explicit, or WEB_ORIGIN_HOST auto-injected by the platform
   // blueprint (hostname only), else local dev. On Render, additionally
   // tolerate sibling *.onrender.com origins so first-deploy ordering races

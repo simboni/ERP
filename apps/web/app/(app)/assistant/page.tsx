@@ -14,9 +14,17 @@ interface Artifact {
   totalCents?: number;
 }
 
+interface Attachment {
+  name: string;
+  mime: string;
+  /** Kept only until the turn is accepted by the server, then stripped. */
+  dataBase64?: string;
+}
+
 interface Turn {
   role: "user" | "assistant";
   content: string;
+  attachments?: Attachment[];
   artifacts?: Artifact[];
 }
 
@@ -27,14 +35,35 @@ const SUGGESTION_KEYS = [
   "aiSuggestInvoices",
 ] as const;
 
+const ACCEPT_MIMES = [
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "application/pdf",
+];
+const MAX_FILES = 3;
+const MAX_BYTES = 5 * 1024 * 1024;
+
+function readBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(",")[1] ?? "");
+    r.onerror = () => reject(new Error("read failed"));
+    r.readAsDataURL(file);
+  });
+}
+
 export default function AssistantPage() {
   const { t } = useI18n();
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
+  const [pending, setPending] = useState<Attachment[]>([]);
   const [busy, setBusy] = useState(false);
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [error, setError] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!getTenantToken()) return;
@@ -47,30 +76,83 @@ export default function AssistantPage() {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
   }, [turns, busy]);
 
+  const onPick = async (files: FileList | null): Promise<void> => {
+    if (!files || files.length === 0) return;
+    setError("");
+    const next = [...pending];
+    for (const f of Array.from(files)) {
+      if (next.length >= MAX_FILES) {
+        setError(t("aiAttachLimit"));
+        break;
+      }
+      if (!ACCEPT_MIMES.includes(f.type)) {
+        setError(t("aiAttachUnsupported"));
+        continue;
+      }
+      if (f.size > MAX_BYTES) {
+        setError(t("aiAttachTooLarge"));
+        continue;
+      }
+      try {
+        next.push({ name: f.name, mime: f.type, dataBase64: await readBase64(f) });
+      } catch {
+        setError(t("aiAttachUnsupported"));
+      }
+    }
+    setPending(next);
+  };
+
   const send = async (text?: string): Promise<void> => {
     const content = (text ?? input).trim();
-    if (!content || busy) return;
+    if ((!content && pending.length === 0) || busy) return;
     setError("");
     setInput("");
-    const nextTurns: Turn[] = [...turns, { role: "user", content }];
+    const sentAttachments = pending;
+    setPending([]);
+    const nextTurns: Turn[] = [
+      ...turns,
+      {
+        role: "user",
+        content,
+        attachments: sentAttachments.length > 0 ? sentAttachments : undefined,
+      },
+    ];
     setTurns(nextTurns);
     setBusy(true);
     try {
       const res = await api<{ reply: string; artifacts: Artifact[] }>("/ai/ask", {
         method: "POST",
         body: {
-          messages: nextTurns.map((tn) => ({ role: tn.role, content: tn.content })),
+          messages: nextTurns.map((tn, i) => ({
+            role: tn.role,
+            content: tn.content,
+            // Full bytes only for the newest turn; older ones send names so
+            // the payload stays small as the conversation grows.
+            attachments: tn.attachments?.map((a) =>
+              i === nextTurns.length - 1
+                ? a
+                : { name: a.name, mime: a.mime },
+            ),
+          })),
         },
       });
       setTurns((prev) => [
-        ...prev,
+        ...prev.map((p) =>
+          p.attachments
+            ? {
+                ...p,
+                attachments: p.attachments.map(({ name, mime }) => ({ name, mime })),
+              }
+            : p,
+        ),
         { role: "assistant", content: res.reply, artifacts: res.artifacts },
       ]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Request failed");
-      // Roll the user turn back into the input so nothing is lost.
+      // Roll the user turn back into the composer so nothing is lost.
       setTurns(turns);
       setInput(content);
+      setPending(sentAttachments);
     } finally {
       setBusy(false);
     }
@@ -113,6 +195,15 @@ export default function AssistantPage() {
               className={`${styles.row} ${turn.role === "user" ? styles.user : styles.assistant}`}
             >
               <div className={styles.bubble}>
+                {turn.attachments && turn.attachments.length > 0 && (
+                  <div className={styles.attRow}>
+                    {turn.attachments.map((a, j) => (
+                      <span key={j} className={styles.attChip}>
+                        📎 {a.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <div className={styles.text}>{turn.content}</div>
                 {turn.artifacts && turn.artifacts.length > 0 && (
                   <div className={styles.cards}>
@@ -153,7 +244,46 @@ export default function AssistantPage() {
 
       {error && <div className="err">{error}</div>}
 
+      {pending.length > 0 && (
+        <div className={styles.pendRow}>
+          {pending.map((a, i) => (
+            <span key={i} className={styles.pendChip}>
+              📎 {a.name}
+              <button
+                className={styles.pendRemove}
+                aria-label={`Remove ${a.name}`}
+                onClick={() =>
+                  setPending((prev) => prev.filter((_, j) => j !== i))
+                }
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
       <div className={styles.composer}>
+        <button
+          className={styles.attachBtn}
+          title={t("aiAttach")}
+          aria-label={t("aiAttach")}
+          disabled={busy || enabled === false}
+          onClick={() => fileRef.current?.click()}
+        >
+          📎
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept={ACCEPT_MIMES.join(",")}
+          multiple
+          hidden
+          onChange={(e) => {
+            void onPick(e.target.files);
+            e.target.value = "";
+          }}
+        />
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -169,7 +299,7 @@ export default function AssistantPage() {
         />
         <button
           onClick={() => void send()}
-          disabled={busy || !input.trim() || enabled === false}
+          disabled={busy || (!input.trim() && pending.length === 0) || enabled === false}
         >
           {t("send")}
         </button>
