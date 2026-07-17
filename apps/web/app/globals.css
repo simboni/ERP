@@ -1991,12 +1991,12 @@ button.ghost:hover { background: var(--card-2); }
 .ai-panel {
   position: fixed;
   right: 24px;
-  bottom: 96px;
+  bottom: 88px;
   z-index: 56;
-  width: 520px;
+  width: 640px;
   max-width: calc(100vw - 48px);
-  height: 760px;
-  max-height: calc(100dvh - 112px);
+  height: 860px;
+  max-height: calc(100dvh - 104px);
   display: flex;
   flex-direction: column;
   background: var(--card);

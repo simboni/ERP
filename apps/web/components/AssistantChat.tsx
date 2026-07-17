@@ -477,7 +477,6 @@ export default function AssistantChat({
           {t("send")}
         </button>
       </div>
-      <p className={styles.disclaimer}>{t("aiDisclaimer")}</p>
     </div>
   );
 }
