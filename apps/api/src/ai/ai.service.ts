@@ -359,14 +359,19 @@ export class AiService {
     // just a trailing remark. Collect every turn's text in order.
     const textParts: string[] = [];
     for (let i = 0; i < MAX_LOOP; i++) {
-      const response = await this.client.messages.create({
+      let response: Anthropic.Message;
+      try {
+        response = await this.client.messages.create({
         model: MODEL,
         max_tokens: 4096,
         thinking: { type: "adaptive" },
         system,
         tools: TOOLS,
         messages,
-      });
+        });
+      } catch (err) {
+        throw this.mapProviderError(err);
+      }
 
       const toolUses = response.content.filter(
         (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
@@ -409,6 +414,42 @@ export class AiService {
       reply: reply || "Sorry — I couldn't complete that. Please try again.",
       artifacts,
     };
+  }
+
+  /**
+   * Turn a raw Anthropic API failure into a clear, human message so the chat
+   * shows *why* it stopped (out of credit, bad key, busy) instead of a
+   * generic "Request failed". Returns a 503 so the client treats it as a
+   * transient service issue, not a bug in the user's request.
+   */
+  private mapProviderError(err: unknown): Error {
+    const status = (err as { status?: number }).status;
+    const message = (err as { message?: string }).message ?? "";
+    if (status === 400 && /credit balance is too low/i.test(message)) {
+      return new ServiceUnavailableException(
+        "The assistant is out of Anthropic credit. Top up at console.anthropic.com → Plans & Billing to switch it back on.",
+      );
+    }
+    if (status === 401) {
+      return new ServiceUnavailableException(
+        "The assistant's API key was rejected. Update ANTHROPIC_API_KEY on the server.",
+      );
+    }
+    if (status === 429) {
+      return new ServiceUnavailableException(
+        "The assistant is busy right now (rate limited). Please try again in a moment.",
+      );
+    }
+    if (status === 529 || status === 503 || status === 500) {
+      return new ServiceUnavailableException(
+        "The assistant is temporarily unavailable. Please try again shortly.",
+      );
+    }
+    // eslint-disable-next-line no-console
+    console.error("AI provider error:", err);
+    return new ServiceUnavailableException(
+      "The assistant couldn't complete that request. Please try again.",
+    );
   }
 
   /** Execute one tenant-scoped tool. Public for direct testing. */
