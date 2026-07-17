@@ -10,6 +10,7 @@
     "lint": "tsc -p tsconfig.build.json --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.112.1",
     "@jenga/shared": "workspace:*",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",

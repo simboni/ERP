@@ -156,6 +156,12 @@ export const Icons = {
       <path d="M17 8.5 20.5 12 17 15.5M10 12h10.5" />
     </svg>
   ),
+  spark: (
+    <svg viewBox="0 0 24 24" {...stroke}>
+      <path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.4L12 3z" />
+      <path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16z" />
+    </svg>
+  ),
 };
 
 interface NavItem {
@@ -175,7 +181,10 @@ interface NavSection {
 const NAV: NavSection[] = [
   {
     titleKey: null,
-    items: [{ href: "/dashboard", labelKey: "navDashboard", icon: "home" }],
+    items: [
+      { href: "/dashboard", labelKey: "navDashboard", icon: "home" },
+      { href: "/assistant", labelKey: "navAssistant", icon: "spark" },
+    ],
   },
   {
     titleKey: "navInvoicing",

@@ -7,6 +7,8 @@ import { ChatService } from "./chat/chat.service";
 import { ChatController } from "./chat/chat.controller";
 import { AlertsService } from "./alerts/alerts.service";
 import { AlertsController } from "./alerts/alerts.controller";
+import { AiService } from "./ai/ai.service";
+import { AiController } from "./ai/ai.controller";
 import { ComplianceController } from "./compliance/compliance.controller";
 import { ComplianceService } from "./compliance/compliance.service";
 import { ControlsController } from "./controls/controls.controller";
@@ -80,6 +82,7 @@ import { TenantsController } from "./tenants/tenants.controller";
     AuthController,
     ChatController,
     AlertsController,
+    AiController,
     DemoController,
     TenantsController,
     SettingsController,
@@ -114,6 +117,7 @@ import { TenantsController } from "./tenants/tenants.controller";
     AuthService,
     ChatService,
     AlertsService,
+    AiService,
     DemoService,
     DemoPurgeService,
     AuditService,
