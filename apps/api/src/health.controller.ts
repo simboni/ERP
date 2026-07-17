@@ -17,16 +17,33 @@ export class HealthController {
    * Liveness first: this endpoint always answers 200 so the platform
    * routes traffic and problems surface as readable errors instead of a
    * blank Bad Gateway. Database state is reported as data.
+   *
+   * `version` reports which commit is actually running, so "did my push
+   * deploy?" is a one-second check: curl /health and compare the sha to the
+   * branch head. Railway/Render inject the git sha at build time; falls
+   * back to "unknown" for local runs.
    */
   @Get()
   async health() {
+    const version =
+      process.env.RAILWAY_GIT_COMMIT_SHA ??
+      process.env.RENDER_GIT_COMMIT ??
+      process.env.GIT_COMMIT_SHA ??
+      "unknown";
+    const branch =
+      process.env.RAILWAY_GIT_BRANCH ?? process.env.RENDER_GIT_BRANCH ?? null;
+    const meta = {
+      version: version === "unknown" ? version : version.slice(0, 8),
+      ...(branch ? { branch } : {}),
+    };
     try {
       await this.db.query("SELECT 1");
-      return { status: "ok", db: "ok" };
+      return { status: "ok", db: "ok", ...meta };
     } catch (err) {
       return {
         status: "degraded",
         db: `error: ${err instanceof Error ? err.message : String(err)}`,
+        ...meta,
       };
     }
   }
