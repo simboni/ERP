@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, clearTokens, getTenantToken } from "@/lib/api";
 import { CommandPalette } from "@/components/CommandPalette";
+import AssistantChat from "@/components/AssistantChat";
 import { LangToggle, useI18n, type TKey } from "@/lib/i18n";
 import {
   OPTIONAL_MODULE_KEYS,
@@ -296,6 +297,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [alerts, setAlerts] = useState<AlertFeed | null>(null);
   const [bellOpen, setBellOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -347,7 +349,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setOpen(false);
     setMenuOpen(false);
     setBellOpen(false);
+    setAiOpen(false);
   }, [pathname]);
+
+  // Esc closes the floating assistant panel.
+  useEffect(() => {
+    if (!aiOpen) return;
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") setAiOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [aiOpen]);
 
   // Any click outside the account chip closes its menu.
   useEffect(() => {
@@ -472,14 +485,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <span className="topbar-tenant">{tenantName}</span>
           <span className="topbar-spacer" />
           <div className="topbar-tools">
-          <Link
-            href="/assistant"
-            className="topbar-ai"
+          <button
+            type="button"
+            className={`topbar-ai${aiOpen ? " active" : ""}`}
             aria-label={t("aiTitle")}
             title={t("aiTitle")}
+            aria-pressed={aiOpen}
+            onClick={() => setAiOpen((v) => !v)}
           >
             {Icons.spark}
-          </Link>
+          </button>
           <button
             type="button"
             className="topbar-search"
@@ -586,17 +601,35 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </span>
         </header>
         <main>{children}</main>
-        {/* Glowing quick-launch for the assistant on every screen; hidden on
-            full-bleed pages that own the bottom edge (assistant, chat). */}
+        {/* Glowing quick-launch: toggles the floating assistant over the
+            current page. Hidden on full-bleed pages that own the bottom edge
+            (the dedicated assistant route, chat). */}
         {pathname !== "/assistant" && pathname !== "/chat" && (
-          <Link
-            href="/assistant"
-            className="ai-fab"
+          <button
+            type="button"
+            className={`ai-fab${aiOpen ? " open" : ""}`}
             aria-label={t("aiTitle")}
             title={t("aiTitle")}
+            aria-pressed={aiOpen}
+            onClick={() => setAiOpen((v) => !v)}
           >
-            {Icons.spark}
-          </Link>
+            {aiOpen ? <span className="ai-fab-x">✕</span> : Icons.spark}
+          </button>
+        )}
+        {/* Floating assistant panel — overlays whatever page is loaded. On
+            phones a full-height sheet with a dimmed backdrop; on desktop a
+            docked card at the bottom-right. */}
+        {aiOpen && (
+          <>
+            <div
+              className="ai-panel-backdrop"
+              onClick={() => setAiOpen(false)}
+              aria-hidden="true"
+            />
+            <div className="ai-panel" role="dialog" aria-label={t("aiTitle")}>
+              <AssistantChat variant="panel" onClose={() => setAiOpen(false)} />
+            </div>
+          </>
         )}
       </div>
       <CommandPalette
