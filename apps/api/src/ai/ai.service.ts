@@ -10,14 +10,28 @@ import { QuotesService } from "../invoicing/quotes.service";
 import { InvoicesService, InvoiceLineInput } from "../invoicing/invoices.service";
 import { ComplianceService } from "../compliance/compliance.service";
 
-/** A document the assistant created this turn, for the UI to render as a card. */
+/**
+ * Something the assistant surfaced this turn, rendered as a card in the chat:
+ * a document it created (quote/invoice draft) or a pin to the app page where
+ * the data it summarized actually lives.
+ */
 export interface AiArtifact {
-  type: "quote" | "invoice";
+  type: "quote" | "invoice" | "page";
   id: string;
   label: string;
   href: string;
   totalCents?: number;
 }
+
+/** Pages the model may pin. The map is the whitelist — nothing else links. */
+const PIN_PAGES: Record<string, { href: string; label: string }> = {
+  invoices: { href: "/invoices", label: "Invoices" },
+  quotes: { href: "/quotes", label: "Quotes" },
+  customers: { href: "/customers", label: "Customers" },
+  payments: { href: "/payments", label: "Payments" },
+  vat: { href: "/vat", label: "VAT" },
+  reports: { href: "/reports", label: "Reports" },
+};
 
 export interface AskResult {
   reply: string;
@@ -61,8 +75,14 @@ Rules:
 - You may CREATE drafts (quotes, draft invoices) and convert quotes to draft invoices. You can NOT issue invoices, fiscalize with KRA, send documents, or move money — after creating a draft, tell the user to review and issue it from the linked page. This is a deliberate control: issuing is a legal/tax act that requires a human.
 - If a customer name doesn't match exactly, use find_customers and confirm your best match with the user; only create a new customer when they clearly want one.
 - The user may attach photos or PDFs (receipts, supplier bills, LPOs, price lists, handwritten notes). Read them carefully and extract names, dates, quantities and amounts faithfully — never guess an unreadable figure, ask instead. Totals on receipts/bills are usually VAT-INCLUSIVE: for standard-rated lines derive the VAT-exclusive unit price (divide by 1.16) and say you did so. State what you extracted before creating any document from it.
-- Reply in the language the user writes in (English or Kiswahili). Be brief and concrete: lead with the outcome, then key figures.
-- If asked something outside the business/books, politely steer back.`;
+- Reply in the language the user writes in (English or Kiswahili).
+- If asked something outside the business/books, politely steer back.
+
+Format — your replies render as PLAIN TEXT chat bubbles:
+- NEVER use markdown tables, headings (#) or code blocks; they show as raw symbols. You may bold a key figure with **bold**; use "• " for short list lines.
+- Keep it SHORT. Lead with the answer in one sentence ("You have 25 overdue invoices totalling KES 789,073."). Then at most the top 3 items, one line each: "• Chebet Distributors — KES 68,620, due 7 Apr".
+- Never dump full lists into the chat. Summarize, then call link_page so the user gets a card straight to the page where the full list lives (e.g. Invoices for overdue lists, VAT for returns).
+- One follow-up question maximum, only when genuinely useful.`;
 
 /** Raw JSON-Schema tool definitions (Anthropic.Tool shape). */
 const TOOLS: Anthropic.Tool[] = [
@@ -182,6 +202,25 @@ const TOOLS: Anthropic.Tool[] = [
         },
       },
       required: ["customerId", "lines"],
+    },
+  },
+  {
+    name: "link_page",
+    description:
+      "Pin an app page as a card in the chat so the user can jump to where the data lives. Use after summarizing lists (overdue invoices -> invoices, VAT figures -> vat) instead of dumping full data into the reply.",
+    input_schema: {
+      type: "object",
+      properties: {
+        page: {
+          type: "string",
+          enum: ["invoices", "quotes", "customers", "payments", "vat", "reports"],
+        },
+        label: {
+          type: "string",
+          description: "Optional short card label, e.g. 'Overdue invoices'",
+        },
+      },
+      required: ["page"],
     },
   },
   {
@@ -474,6 +513,25 @@ export class AiService {
           });
           return { invoiceId: res.id, status: "draft", totalCents };
         });
+      }
+
+      case "link_page": {
+        const page = PIN_PAGES[String(input.page ?? "")];
+        if (!page) throw new Error("Unknown page");
+        const label =
+          typeof input.label === "string" && input.label.trim()
+            ? input.label.trim().slice(0, 60)
+            : page.label;
+        // One pin per page per turn; repeats would just clutter the chat.
+        if (!artifacts.some((a) => a.type === "page" && a.href === page.href)) {
+          artifacts.push({
+            type: "page",
+            id: `page-${String(input.page)}`,
+            label,
+            href: page.href,
+          });
+        }
+        return { pinned: page.href };
       }
 
       case "convert_quote_to_invoice":

@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, fmtKes, getTenantToken } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import styles from "./assistant.module.css";
 
 interface Artifact {
-  type: "quote" | "invoice";
+  type: "quote" | "invoice" | "page";
   id: string;
   label: string;
   href: string;
@@ -26,6 +26,22 @@ interface Turn {
   content: string;
   attachments?: Attachment[];
   artifacts?: Artifact[];
+}
+
+/**
+ * Replies are plain text with at most **bold** figures. Render the bold
+ * inline (newlines survive via pre-wrap) so no raw ** ever shows.
+ */
+function renderRich(text: string): ReactNode {
+  return text
+    .split(/(\*\*[^*\n]+\*\*)/g)
+    .map((seg, i) =>
+      seg.startsWith("**") && seg.endsWith("**") && seg.length > 4 ? (
+        <strong key={i}>{seg.slice(2, -2)}</strong>
+      ) : (
+        seg
+      ),
+    );
 }
 
 const SUGGESTION_KEYS = [
@@ -64,6 +80,23 @@ export default function AssistantPage() {
   const [error, setError] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  // Full-bleed: the assistant owns the whole area below the top bar,
+  // same as Chat, instead of sitting inside the padded page frame.
+  useEffect(() => {
+    document.body.classList.add("chat-fullbleed");
+    return () => document.body.classList.remove("chat-fullbleed");
+  }, []);
+
+  // The text area grows with the message (capped in CSS) so longer
+  // instructions never scroll inside a single squeezed row.
+  const autoGrow = (): void => {
+    const el = taRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
+  };
 
   useEffect(() => {
     if (!getTenantToken()) return;
@@ -107,6 +140,7 @@ export default function AssistantPage() {
     if ((!content && pending.length === 0) || busy) return;
     setError("");
     setInput("");
+    if (taRef.current) taRef.current.style.height = "auto";
     const sentAttachments = pending;
     setPending([]);
     const nextTurns: Turn[] = [
@@ -204,13 +238,13 @@ export default function AssistantPage() {
                     ))}
                   </div>
                 )}
-                <div className={styles.text}>{turn.content}</div>
+                <div className={styles.text}>{renderRich(turn.content)}</div>
                 {turn.artifacts && turn.artifacts.length > 0 && (
                   <div className={styles.cards}>
                     {turn.artifacts.map((a) => (
                       <Link key={a.id} href={a.href} className={styles.card}>
                         <span className={styles.cardIcon}>
-                          {a.type === "quote" ? "📄" : "🧾"}
+                          {a.type === "quote" ? "📄" : a.type === "invoice" ? "🧾" : "📍"}
                         </span>
                         <span className={styles.cardBody}>
                           <span className={styles.cardLabel}>{a.label}</span>
@@ -220,7 +254,7 @@ export default function AssistantPage() {
                             </span>
                           )}
                           <span className={styles.cardHint}>
-                            {t("aiReviewAndIssue")} →
+                            {(a.type === "page" ? t("aiOpen") : t("aiReviewAndIssue"))} →
                           </span>
                         </span>
                       </Link>
@@ -263,7 +297,7 @@ export default function AssistantPage() {
         </div>
       )}
 
-      <div className={styles.composer}>
+      <div className={styles.composerBox}>
         <button
           className={styles.attachBtn}
           title={t("aiAttach")}
@@ -285,8 +319,12 @@ export default function AssistantPage() {
           }}
         />
         <textarea
+          ref={taRef}
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => {
+            setInput(e.target.value);
+            autoGrow();
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
@@ -298,6 +336,7 @@ export default function AssistantPage() {
           rows={1}
         />
         <button
+          className={styles.sendBtn}
           onClick={() => void send()}
           disabled={busy || (!input.trim() && pending.length === 0) || enabled === false}
         >

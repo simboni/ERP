@@ -1,12 +1,26 @@
+/* The assistant owns the full area below the top bar (body.chat-fullbleed,
+   same mechanism as Chat). Inside it: a centered column — compact header,
+   scrolling thread that takes ALL remaining height, composer pinned at the
+   bottom. Spacing runs on an 8px grid; touch targets are 44px minimum. */
+
 .wrap {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 140px);
-  min-height: 480px;
-  max-width: 860px;
+  width: 100%;
+  max-width: 1100px;
   margin: 0 auto;
+  padding: 16px 28px 16px;
 }
 
+.head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
 .head h1 {
   display: flex;
   align-items: center;
@@ -15,12 +29,12 @@
 }
 .spark {
   color: var(--brand);
-  font-size: 1.4rem;
+  font-size: 1.3rem;
 }
 .tagline {
   color: var(--muted);
-  margin: 4px 0 14px;
-  font-size: 0.92rem;
+  margin: 0;
+  font-size: 0.9rem;
 }
 
 .notice {
@@ -33,40 +47,45 @@
   margin-bottom: 12px;
 }
 
+/* ---- thread ---------------------------------------------------------- */
+
 .thread {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   background: var(--card-2);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  padding: 18px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .empty {
   margin: auto;
   text-align: center;
   color: var(--muted);
-  max-width: 480px;
+  max-width: 520px;
+  font-size: 0.95rem;
 }
 .chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
   justify-content: center;
-  margin-top: 14px;
+  margin-top: 16px;
 }
 .chip {
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 20px;
-  padding: 8px 14px;
-  font-size: 0.85rem;
+  border-radius: 22px;
+  padding: 10px 16px;
+  font-size: 0.88rem;
   color: var(--ink-2);
   cursor: pointer;
-  min-height: 0;
+  margin: 0;
+  min-height: 44px;
   transition: border-color 0.12s ease, color 0.12s ease;
 }
 .chip:hover {
@@ -84,23 +103,25 @@
   justify-content: flex-start;
 }
 
+/* Reading measure: bubbles cap at a comfortable line length rather than a
+   percentage, so text never stretches unreadably wide on big screens. */
 .bubble {
-  max-width: 78%;
-  padding: 10px 14px;
-  border-radius: 14px;
-  font-size: 0.93rem;
-  line-height: 1.5;
+  max-width: min(680px, 82%);
+  padding: 12px 16px;
+  border-radius: 16px;
+  font-size: 0.95rem;
+  line-height: 1.55;
 }
 .user .bubble {
   background: var(--brand);
   color: var(--brand-ink);
-  border-bottom-right-radius: 5px;
+  border-bottom-right-radius: 6px;
 }
 .assistant .bubble {
   background: var(--card);
   border: 1px solid var(--line);
   color: var(--ink);
-  border-bottom-left-radius: 5px;
+  border-bottom-left-radius: 6px;
 }
 .text {
   white-space: pre-wrap;
@@ -119,8 +140,8 @@
   gap: 12px;
   background: var(--brand-soft);
   border: 1px solid var(--brand);
-  border-radius: 10px;
-  padding: 10px 12px;
+  border-radius: 12px;
+  padding: 12px 14px;
   text-decoration: none;
   color: inherit;
 }
@@ -142,6 +163,7 @@
 }
 .cardTotal {
   font-family: var(--mono, monospace);
+  font-variant-numeric: tabular-nums;
   font-size: 0.85rem;
   color: var(--ink-2);
 }
@@ -149,6 +171,31 @@
   font-size: 0.76rem;
   color: var(--brand);
   font-weight: 600;
+}
+
+.attRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.attChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 8px;
+  padding: 3px 9px;
+  font-size: 0.78rem;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.assistant .attChip {
+  background: var(--card-2);
+  border-color: var(--line);
 }
 
 .typing {
@@ -187,36 +234,13 @@
   }
 }
 
-.attRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-.attChip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: rgba(255, 255, 255, 0.18);
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  border-radius: 8px;
-  padding: 2px 8px;
-  font-size: 0.78rem;
-  max-width: 240px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.assistant .attChip {
-  background: var(--card-2);
-  border-color: var(--line);
-}
+/* ---- composer -------------------------------------------------------- */
 
 .pendRow {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 .pendChip {
   display: inline-flex;
@@ -225,7 +249,7 @@
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 5px 8px 5px 10px;
+  padding: 6px 8px 6px 10px;
   font-size: 0.82rem;
   color: var(--ink-2);
   max-width: 280px;
@@ -236,67 +260,109 @@
   color: var(--muted);
   cursor: pointer;
   font-size: 0.8rem;
+  margin: 0;
   padding: 2px 4px;
   min-height: 0;
   line-height: 1;
 }
 .pendRemove:hover {
   color: var(--danger, #c0392b);
+  background: none;
 }
 
-.composer {
+/* One focus surface: attach, input and send live in a single card that
+   lights up as a whole — the text area inside is borderless and grows
+   with the message (up to ~8 lines) instead of staying one squeezed row. */
+.composerBox {
   display: flex;
-  gap: 10px;
-  margin-top: 12px;
   align-items: flex-end;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  transition: border-color 0.12s, box-shadow 0.12s;
 }
-/* Scoped under .composer so these beat the generic `.composer button`
-   padding rule below — otherwise the icon gets squeezed off-centre. */
-.composer .attachBtn {
+.composerBox:focus-within {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+.composerBox textarea {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  resize: none;
+  padding: 11px 4px;
+  min-height: 44px;
+  max-height: 220px;
+  font-size: 1rem;
+  line-height: 1.55;
+  border-radius: 0;
+}
+.composerBox textarea:focus {
+  outline: none;
+  border: 0;
+  box-shadow: none;
+}
+
+.attachBtn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 46px;
-  min-height: 46px;
-  width: 46px;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
   margin: 0;
   padding: 0;
   flex: 0 0 auto;
-  background: var(--card);
+  background: transparent;
   border: 1px solid var(--line);
-  color: var(--ink-2);
   border-radius: 12px;
-  font-size: 1.05rem;
+  color: var(--ink-2);
+  font-size: 1.1rem;
   line-height: 1;
 }
-.composer .attachBtn:hover:not(:disabled) {
+.attachBtn:hover:not(:disabled) {
   border-color: var(--brand);
+  background: var(--brand-soft);
 }
-.composer textarea {
-  flex: 1;
-  resize: none;
+
+.sendBtn {
+  height: 44px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0 26px;
   border-radius: 12px;
-  min-height: 46px;
-  max-height: 140px;
-}
-.composer button {
-  min-height: 46px;
-  margin-top: 0;
-  padding: 0 22px;
+  flex: 0 0 auto;
+  font-size: 0.95rem;
 }
 
 .disclaimer {
   color: var(--muted);
   font-size: 0.78rem;
   text-align: center;
-  margin: 8px 0 0;
+  margin: 10px 0 0;
 }
+
+/* ---- mobile ---------------------------------------------------------- */
 
 @media (max-width: 760px) {
   .wrap {
-    height: calc(100dvh - 210px);
+    padding: 10px 12px 12px;
+  }
+  .thread {
+    padding: 14px;
+    gap: 12px;
   }
   .bubble {
-    max-width: 90%;
+    max-width: 92%;
+  }
+  .composerBox {
+    padding: 8px;
+    gap: 8px;
+  }
+  .sendBtn {
+    padding: 0 18px;
   }
 }
