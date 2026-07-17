@@ -78,15 +78,20 @@ Rules:
 - Reply in the language the user writes in (English or Kiswahili).
 - If asked something outside the business/books, politely steer back.
 
+Dates: interpret relative dates against TODAY'S DATE (given below). "This month" = the current calendar month; "last month" = the calendar month before it; "this year" = the current year. list_invoices returns issue_date and due_date — filter on them yourself to answer date questions, and state the actual month/dates you used.
+
 Format — the chat bubble renders **bold**, bullet lists ("- item") and simple pipe tables. Use them:
-- Give the FULL answer with the real figures — do not withhold rows or hide detail behind a link. Open with a one-line headline ("You have 12 overdue invoices totalling KES 789,073."), then lay the data out clearly.
-- For a list of records (invoices, quotes, payments, customers) render a markdown table. Keep it to 3-4 columns so it reads in a narrow panel, e.g.:
-  | No. | Customer | Amount | Due |
+- SHOW THE DATA. Never reply with only a pinned card and no figures, and never say "open the page to see it" instead of answering. First state what you found, with the real numbers.
+- Open with a one-line headline (e.g. "1 invoice from June 2026 is over KES 200,000:" or "You have 12 overdue invoices totalling KES 789,073.").
+- Then lay out the actual records. For MORE THAN ONE record use a markdown table, 3-4 columns so it fits a narrow panel:
+  | No. | Customer | Amount | Date |
   | --- | --- | --- | --- |
-  | 72 | Chebet Distributors | KES 68,620 | 7 Apr |
-  Include every relevant row (cap very long lists around 15 and say how many more there are). For one record, use bold labels and bullet lines instead of a table.
+  | 72 | Chebet Distributors | KES 290,000 | 10 Jun |
+  Include every matching row (cap very long lists ~15 and say how many more). For EXACTLY ONE record, give its details as bold-labelled lines (No., customer, amount, date, status).
+- If NOTHING matches, say so plainly ("No invoice from June 2026 is over KES 200,000") — do not pin a page as a substitute for the answer.
 - Money as KES with thousands separators. Headings (#) and code blocks are NOT supported — use **bold** for emphasis.
-- ALWAYS end by calling link_page to pin a click-through card to the matching page so the user can open the live records. When the answer is about ONE invoice, pass its invoiceId to deep-link straight to that invoice.
+- AFTER showing the data, call link_page so the user can open the live records. For a single invoice, pass its invoiceId to deep-link straight to it and label the card with its number (e.g. "Open invoice #72"). The pin is an EXTRA, never a replacement for the data.
+- Don't narrate that you're about to look something up ("Let me check…"); just call the tools and answer once you have the data.
 - One follow-up question maximum, only when genuinely useful.`;
 
 /** Raw JSON-Schema tool definitions (Anthropic.Tool shape). */
@@ -343,13 +348,22 @@ export class AiService {
       return { role: "user", content: `${text}\n${markers}`.trim() };
     });
 
-    let reply = "";
+    // Give the model today's date so it can resolve "last month" etc.
+    const today = new Date().toISOString().slice(0, 10);
+    const system = `Today's date is ${today}.\n\n${SYSTEM_PROMPT}`;
+
+    // Accumulate assistant text across ALL turns. The model routinely writes
+    // its substantive answer (the table/figures) in the SAME turn as a
+    // tool_use (e.g. presenting records then calling link_page to pin them);
+    // keeping only the final turn's text would drop that answer and leave
+    // just a trailing remark. Collect every turn's text in order.
+    const textParts: string[] = [];
     for (let i = 0; i < MAX_LOOP; i++) {
       const response = await this.client.messages.create({
         model: MODEL,
         max_tokens: 4096,
         thinking: { type: "adaptive" },
-        system: SYSTEM_PROMPT,
+        system,
         tools: TOOLS,
         messages,
       });
@@ -361,9 +375,9 @@ export class AiService {
         .filter((b): b is Anthropic.TextBlock => b.type === "text")
         .map((b) => b.text)
         .join("");
+      if (text.trim()) textParts.push(text.trim());
 
       if (response.stop_reason !== "tool_use" || toolUses.length === 0) {
-        reply = text || reply;
         break;
       }
 
@@ -390,7 +404,11 @@ export class AiService {
       messages.push({ role: "user", content: results });
     }
 
-    return { reply: reply || "Sorry — I couldn't complete that. Please try again.", artifacts };
+    const reply = textParts.join("\n\n");
+    return {
+      reply: reply || "Sorry — I couldn't complete that. Please try again.",
+      artifacts,
+    };
   }
 
   /** Execute one tenant-scoped tool. Public for direct testing. */
