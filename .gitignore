@@ -8,3 +8,4 @@ coverage/
 .ca-bundle.crt
 .next/
 out/
+.claude/
